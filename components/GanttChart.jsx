@@ -237,6 +237,55 @@ const GanttChart = () => {
     [weightedProgresses]
   );
 
+  // WBS Summary calculations
+  const wbsSummaries = useMemo(() => {
+    return wbsList.map(wbs => {
+      const activities = wbs.activities;
+      if (activities.length === 0) {
+        return {
+          totalManHours: 0,
+          totalWeight: 0,
+          earliestStart: null,
+          latestFinish: null,
+          progress: 0,
+        };
+      }
+
+      const totalWbsManHours = activities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
+      const totalWeight = totalManHours > 0 ? (totalWbsManHours / totalManHours) * 100 : 0;
+      
+      const validDates = activities.filter(act => 
+        act.startDate && act.finishDate && 
+        !isNaN(act.startDate.getTime()) && !isNaN(act.finishDate.getTime())
+      );
+      
+      const earliestStart = validDates.length > 0 
+        ? new Date(Math.min(...validDates.map(act => act.startDate.getTime())))
+        : null;
+      
+      const latestFinish = validDates.length > 0
+        ? new Date(Math.max(...validDates.map(act => act.finishDate.getTime())))
+        : null;
+
+      // Calculate WBS progress as weighted average of activities within this WBS
+      const wbsProgress = totalWbsManHours > 0
+        ? activities.reduce((sum, act) => {
+            const actWeight = (Number(act.manHours) || 0) / totalWbsManHours;
+            const actProgress = Math.max(0, Math.min(100, Number(act.progress) || 0));
+            return sum + (actWeight * actProgress);
+          }, 0)
+        : 0;
+
+      return {
+        totalManHours: totalWbsManHours,
+        totalWeight,
+        earliestStart,
+        latestFinish,
+        progress: wbsProgress,
+      };
+    });
+  }, [wbsList, totalManHours]);
+
   // Timeline data (min/max dates)
   const chartData = useMemo(() => {
     const validTasks = allActivities.filter(
@@ -433,6 +482,8 @@ const GanttChart = () => {
     return map;
   };
 
+  const totalColumnsWidth = headerCols.reduce((sum, col) => sum + (columnWidths[col.key] || 90), 0);
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Context Menu */}
@@ -522,14 +573,14 @@ const GanttChart = () => {
         <CardContent>
           {/* Gantt Chart */}
           <div className="border rounded-lg overflow-auto max-h-96">
-            <div className="min-w-max">
+            <div className="min-w-max relative">
               {/* Header */}
-              <div className="bg-gray-100 border-b sticky top-0 z-10">
+              <div className="bg-gray-100 border-b sticky top-0 z-20">
                 <div className="flex">
                   {headerCols.map((col, idx, arr) => (
                     <div
                       key={col.key}
-                      className={`p-2 bg-gray-200 text-center sticky left-0 z-20 relative group`}
+                      className={`p-2 bg-gray-200 text-center sticky left-0 z-30 relative group`}
                       style={{
                         width: `${columnWidths[col.key] || 90}px`,
                         left: `${arr
@@ -547,7 +598,7 @@ const GanttChart = () => {
                         <div
                           className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400"
                           onMouseDown={(e) => handleMouseDown(e, col.key)}
-                          style={{ zIndex: 25 }}
+                          style={{ zIndex: 35 }}
                         />
                       )}
                     </div>
@@ -576,94 +627,119 @@ const GanttChart = () => {
               </div>
 
               {/* WBS Sections */}
-              {wbsList.map((wbs) => {
+              {wbsList.map((wbs, wbsIndex) => {
                 const leftMap = getLeftMap();
                 const isCollapsed = collapsed[wbs.wbsId];
+                const summary = wbsSummaries[wbsIndex];
                 return (
                   <React.Fragment key={wbs.wbsId}>
-                    {/* WBS Row */}
+                    {/* WBS Row - Completely fixed on horizontal scroll */}
                     <div
-                      className="flex items-center"
+                      className="relative"
                       style={{
                         background: `linear-gradient(90deg, ${wbs.color}, #4d9dff 80%)`,
-                        minHeight: 38,
-                        padding: "0",
-                        position: "relative",
+                        minHeight: 50,
+                        marginTop: 5,
                         borderTopLeftRadius: 8,
                         borderTopRightRadius: 8,
-                        marginTop: 5,
-                        fontSize: "1rem",
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 15,
+                        width: "100%",
                       }}
                     >
-                      {/* Collapse/Expand Icon */}
-                      <button
-                        onClick={() =>
-                          setCollapsed((prev) => ({
-                            ...prev,
-                            [wbs.wbsId]: !prev[wbs.wbsId],
-                          }))
-                        }
-                        className="focus:outline-none ml-2 mr-2"
-                        style={{
-                          background: "none",
-                          border: "none",
-                          padding: 0,
-                          height: 28,
-                          width: 28,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                        aria-label={isCollapsed ? "Expand" : "Collapse"}
-                      >
-                        {isCollapsed ? (
-                          <ChevronRight className="text-white w-5 h-5" />
-                        ) : (
-                          <ChevronDown className="text-white w-5 h-5" />
-                        )}
-                      </button>
-                      {/* Dot and Name */}
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: 16,
-                          height: 16,
-                          borderRadius: "50%",
-                          background: "rgba(255,255,255,0.20)",
-                          marginRight: 7,
-                          verticalAlign: "middle",
-                        }}
-                      />
-                      <span
-                        className="font-bold text-white"
-                        style={{ fontSize: "1.05rem", verticalAlign: "middle" }}
-                      >
-                        {wbs.wbsName}
-                      </span>
-                      {/* Add Activity Button */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="ml-3 text-white border border-white/40 font-medium rounded px-2 py-1 hover:bg-white/20"
-                        style={{
-                          fontSize: "0.93rem",
-                          height: 28,
-                          minWidth: 0,
-                          boxShadow: "0 1px 4px 0 rgba(30,100,255,0.04)",
-                          marginLeft: 8,
-                        }}
-                        onClick={() => addNewTask(wbs.wbsId)}
-                      >
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add Activity
-                      </Button>
+                      <div className="flex items-center h-full">
+                        {/* Collapse/Expand Icon */}
+                        <button
+                          onClick={() =>
+                            setCollapsed((prev) => ({
+                              ...prev,
+                              [wbs.wbsId]: !prev[wbs.wbsId],
+                            }))
+                          }
+                          className="focus:outline-none ml-2 mr-2"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            height: 28,
+                            width: 28,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          aria-label={isCollapsed ? "Expand" : "Collapse"}
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="text-white w-5 h-5" />
+                          ) : (
+                            <ChevronDown className="text-white w-5 h-5" />
+                          )}
+                        </button>
+                        
+                        {/* WBS Name */}
+                        <span
+                          className="font-bold text-white mr-4"
+                          style={{ fontSize: "1.05rem" }}
+                        >
+                          {wbs.wbsName}
+                        </span>
+                        
+                        {/* WBS Summary Information positioned to align with columns */}
+                        <div className="flex items-center text-white text-xs" style={{ marginLeft: `${leftMap.description - 100}px` }}>
+                          {showManHours && (
+                            <>
+                              <span className="text-center" style={{ width: `${columnWidths.manHours}px`, marginRight: `${leftMap.activityWeight - leftMap.manHours - columnWidths.manHours}px` }}>
+                                {summary.totalManHours}
+                              </span>
+                              <span className="text-center" style={{ width: `${columnWidths.activityWeight}px`, marginRight: `${leftMap.startDate - leftMap.activityWeight - columnWidths.activityWeight}px` }}>
+                                {summary.totalWeight.toFixed(1)}%
+                              </span>
+                            </>
+                          )}
+                          <span className="text-center" style={{ width: `${columnWidths.startDate}px`, marginRight: `${leftMap.finishDate - leftMap.startDate - columnWidths.startDate}px` }}>
+                            {summary.earliestStart ? format(summary.earliestStart, "MMM dd") : "-"}
+                          </span>
+                          <span className="text-center" style={{ width: `${columnWidths.finishDate}px`, marginRight: `${leftMap.progress - leftMap.finishDate - columnWidths.finishDate}px` }}>
+                            {summary.latestFinish ? format(summary.latestFinish, "MMM dd") : "-"}
+                          </span>
+                          <span className="text-center" style={{ width: `${columnWidths.progress}px` }}>
+                            {summary.progress.toFixed(1)}%
+                          </span>
+                        </div>
+
+                        {/* Add Activity Button */}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="ml-auto mr-3 text-white border border-white/40 font-medium rounded px-2 py-1 hover:bg-white/20"
+                          style={{
+                            fontSize: "0.93rem",
+                            height: 28,
+                            minWidth: 0,
+                            boxShadow: "0 1px 4px 0 rgba(30,100,255,0.04)",
+                          }}
+                          onClick={() => addNewTask(wbs.wbsId)}
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add Activity
+                        </Button>
+                      </div>
                     </div>
+                    
                     {/* Activity Rows */}
                     {!isCollapsed && (
                       wbs.activities.length === 0 ? (
-                        <div className="flex text-gray-400 text-xs px-4 py-2">No activities yet.</div>
+                        <div className="flex text-gray-400 text-xs px-4 py-2 relative">
+                          No activities yet.
+                          {/* Full-width activity divider line */}
+                          <div 
+                            className="absolute bottom-0 left-0 h-px bg-blue-400"
+                            style={{ width: "100%" }}
+                          />
+                        </div>
                       ) : (
-                        wbs.activities.map((task) => {
+                        wbs.activities.map((task, taskIndex, taskArray) => {
                           const weight =
                             totalManHours > 0
                               ? ((Number(task.manHours) || 0) / totalManHours)
@@ -671,18 +747,21 @@ const GanttChart = () => {
                           return (
                             <div
                               key={task.id}
-                              className={`flex cursor-pointer hover:bg-gray-50 select-none ${
+                              className={`flex cursor-pointer hover:bg-gray-50 select-none relative ${
                                 selected.wbsId === wbs.wbsId && selected.taskId === task.id
                                   ? "bg-blue-100"
                                   : ""
                               }`}
-                              style={{ minHeight: 38 }}
+                              style={{ 
+                                minHeight: 38,
+                                zIndex: 5
+                              }}
                               onContextMenu={(e) => handleRowContextMenu(e, wbs.wbsId, task.id)}
                               onClick={() => setSelected({ wbsId: wbs.wbsId, taskId: task.id })}
                             >
                               {/* Code */}
                               <div
-                                className="p-2 flex items-center justify-center bg-white sticky left-0 z-10"
+                                className="p-2 flex items-center justify-center bg-white sticky left-0 z-15"
                                 style={{
                                   width: `${columnWidths.code}px`,
                                   minHeight: 38,
@@ -695,7 +774,7 @@ const GanttChart = () => {
                               </div>
                               {/* Description */}
                               <div
-                                className="p-2 bg-white sticky z-10"
+                                className="p-2 bg-white sticky z-15"
                                 style={{
                                   width: `${columnWidths.description}px`,
                                   left: `${leftMap.description}px`,
@@ -715,7 +794,7 @@ const GanttChart = () => {
                               {showManHours && (
                                 <>
                                   <div
-                                    className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                    className="p-2 bg-white sticky z-15 flex items-center justify-center"
                                     style={{
                                       width: `${columnWidths.manHours}px`,
                                       left: `${leftMap.manHours}px`,
@@ -731,7 +810,7 @@ const GanttChart = () => {
                                     />
                                   </div>
                                   <div
-                                    className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                    className="p-2 bg-white sticky z-15 flex items-center justify-center"
                                     style={{
                                       width: `${columnWidths.activityWeight}px`,
                                       left: `${leftMap.activityWeight}px`,
@@ -746,7 +825,7 @@ const GanttChart = () => {
                               )}
                               {/* Start Date */}
                               <div
-                                className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                className="p-2 bg-white sticky z-15 flex items-center justify-center"
                                 style={{
                                   width: `${columnWidths.startDate}px`,
                                   left: `${leftMap.startDate}px`,
@@ -763,7 +842,7 @@ const GanttChart = () => {
                               </div>
                               {/* Finish Date */}
                               <div
-                                className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                className="p-2 bg-white sticky z-15 flex items-center justify-center"
                                 style={{
                                   width: `${columnWidths.finishDate}px`,
                                   left: `${leftMap.finishDate}px`,
@@ -780,7 +859,7 @@ const GanttChart = () => {
                               </div>
                               {/* Progress */}
                               <div
-                                className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                className="p-2 bg-white sticky z-15 flex items-center justify-center"
                                 style={{
                                   width: `${columnWidths.progress}px`,
                                   left: `${leftMap.progress}px`,
@@ -832,6 +911,15 @@ const GanttChart = () => {
                                   )}
                                 </div>
                               </div>
+                              
+                              {/* Full-width activity divider line */}
+                              <div 
+                                className="absolute bottom-0 left-0 h-px bg-blue-400"
+                                style={{ 
+                                  width: "100%",
+                                  zIndex: 1
+                                }}
+                              />
                             </div>
                           );
                         })
