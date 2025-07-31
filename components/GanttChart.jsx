@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo, useRef } from "react";
-import { Plus, Settings2 } from "lucide-react";
+import { Plus, Settings2, ChevronDown, ChevronRight, ChevronsDownUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +19,7 @@ import {
 import { DatePicker } from "../components/date-picker";
 import { NumericInput } from "../components/NumericInput";
 
-// Simple Popover for Settings
+// --- Popover ---
 function Popover({ open, onClose, children, trigger }) {
   const ref = useRef();
   React.useEffect(() => {
@@ -55,11 +55,11 @@ import {
   endOfDay,
 } from "../lib/dateUtils";
 
-// Initial hierarchical WBS+activities data
 const initialWBS = [
   {
     wbsId: "wbs1",
     wbsName: "Engineering",
+    color: "#388bff",
     activities: [
       {
         id: "1",
@@ -84,6 +84,7 @@ const initialWBS = [
   {
     wbsId: "wbs2",
     wbsName: "Procurement",
+    color: "#1e90ff",
     activities: [
       {
         id: "3",
@@ -108,6 +109,7 @@ const initialWBS = [
   {
     wbsId: "wbs3",
     wbsName: "Construction",
+    color: "#2778f0",
     activities: [
       {
         id: "5",
@@ -143,9 +145,21 @@ const GanttChart = () => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, wbsId: null, taskId: null });
   const contextMenuRef = useRef(null);
 
+  // Collapsible state for each WBS
+  const [collapsed, setCollapsed] = useState(
+    Object.fromEntries(initialWBS.map(wbs => [wbs.wbsId, false]))
+  );
+  // Collapsed/expanded all
+  const allCollapsed = Object.values(collapsed).every(v => v);
+  const toggleAll = (forceExpand) => {
+    setCollapsed(
+      Object.fromEntries(wbsList.map(wbs => [wbs.wbsId, !forceExpand]))
+    );
+  };
+
   const [columnWidths, setColumnWidths] = useState({
     code: 80,
-    description: 180,
+    description: 200,
     manHours: 90,
     activityWeight: 110,
     startDate: 120,
@@ -156,15 +170,56 @@ const GanttChart = () => {
   const [startX, setStartX] = useState(0);
   const [startWidth, setStartWidth] = useState(0);
 
-  // For all activities flat
+  // Drag-resize columns
+  const handleMouseDown = (e, column) => {
+    setIsResizing(column);
+    setStartX(e.clientX);
+    setStartWidth(columnWidths[column]);
+    e.preventDefault();
+  };
+  const handleMouseMove = (e) => {
+    if (!isResizing) return;
+    const diff = e.clientX - startX;
+    const newWidth = Math.max(50, startWidth + diff);
+    setColumnWidths((prev) => ({
+      ...prev,
+      [isResizing]: newWidth,
+    }));
+  };
+  const handleMouseUp = () => setIsResizing(null);
+
+  React.useEffect(() => {
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    }
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, startX, startWidth]);
+
+  React.useEffect(() => {
+    const handleClick = (e) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+        setContextMenu((cm) => ({ ...cm, visible: false }));
+      }
+    };
+    if (contextMenu.visible) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [contextMenu.visible]);
+
+  // Weighted progress and man hours
   const allActivities = useMemo(
     () => wbsList.flatMap((wbs) =>
       wbs.activities.map((act) => ({ ...act, wbsId: wbs.wbsId }))
     ),
     [wbsList]
   );
-
-  // Weighted progress and man hours
   const totalManHours = useMemo(
     () => allActivities.reduce((sum, t) => sum + (Number(t.manHours) || 0), 0),
     [allActivities]
@@ -352,7 +407,7 @@ const GanttChart = () => {
 
   const ganttMinWidth = chartData.timeUnits.length * 64;
 
-  // Header columns (use same logic as before)
+  // Header columns
   const headerCols = [
     { key: "code", label: "Code" },
     { key: "description", label: "Activity Description" },
@@ -407,11 +462,19 @@ const GanttChart = () => {
 
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <div className="mt-2">
-            <span className="inline-block font-semibold text-base text-green-700">
-              Overall Progress: {overallProgress.toFixed(1)}%
-            </span>
-          </div>
+          <span className="inline-block font-semibold text-lg text-green-700">
+            Overall Progress: {overallProgress.toFixed(1)}%
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto text-gray-700 flex items-center gap-1"
+            onClick={() => toggleAll(allCollapsed)}
+            title={allCollapsed ? "Expand All" : "Collapse All"}
+          >
+            <ChevronsDownUp className="w-4 h-4" />
+            {allCollapsed ? "Expand All" : "Collapse All"}
+          </Button>
           {/* Settings Button */}
           <Popover
             open={settingsOpen}
@@ -419,7 +482,7 @@ const GanttChart = () => {
             trigger={
               <Button
                 variant="ghost"
-                className="ml-auto"
+                className="ml-2"
                 onClick={() => setSettingsOpen((v) => !v)}
                 aria-label="Settings"
               >
@@ -466,7 +529,7 @@ const GanttChart = () => {
                   {headerCols.map((col, idx, arr) => (
                     <div
                       key={col.key}
-                      className={`p-3 bg-gray-200 text-center sticky left-0 z-20 relative group`}
+                      className={`p-2 bg-gray-200 text-center sticky left-0 z-20 relative group`}
                       style={{
                         width: `${columnWidths[col.key] || 90}px`,
                         left: `${arr
@@ -475,22 +538,29 @@ const GanttChart = () => {
                             (acc, cur) => acc + (columnWidths[cur.key] || 90),
                             0
                           )}px`,
+                        fontSize: "0.95rem",
+                        borderRight: idx < arr.length - 1 ? "1px solid #e5e7eb" : "",
                       }}
                     >
-                      <div className="font-medium text-xs">{col.label}</div>
+                      {col.label}
                       {col.key !== "activityWeight" && (
                         <div
-                          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 group-hover:bg-blue-300"
-                          onMouseDown={(e) => setIsResizing(col.key) || setStartX(e.clientX) || setStartWidth(columnWidths[col.key]) || e.preventDefault()}
+                          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400"
+                          onMouseDown={(e) => handleMouseDown(e, col.key)}
+                          style={{ zIndex: 25 }}
                         />
                       )}
                     </div>
                   ))}
+                  {/* Timeline header */}
                   <div
-                    className="bg-gray-200"
-                    style={{ minWidth: ganttMinWidth }}
+                    className="bg-gray-200 border-b border-gray-300"
+                    style={{
+                      minWidth: ganttMinWidth,
+                      borderRadius: "0 8px 0 0"
+                    }}
                   >
-                    <div className="flex h-12">
+                    <div className="flex h-10">
                       {chartData.timeUnits.map((unit, index) => (
                         <div
                           key={index}
@@ -508,205 +578,264 @@ const GanttChart = () => {
               {/* WBS Sections */}
               {wbsList.map((wbs) => {
                 const leftMap = getLeftMap();
+                const isCollapsed = collapsed[wbs.wbsId];
                 return (
                   <React.Fragment key={wbs.wbsId}>
                     {/* WBS Row */}
-                    <div className="flex items-center bg-blue-50 font-semibold border-b border-blue-200">
-                      <div
-                        className="p-2 text-blue-900"
+                    <div
+                      className="flex items-center"
+                      style={{
+                        background: `linear-gradient(90deg, ${wbs.color}, #4d9dff 80%)`,
+                        minHeight: 38,
+                        padding: "0",
+                        position: "relative",
+                        borderTopLeftRadius: 8,
+                        borderTopRightRadius: 8,
+                        marginTop: 5,
+                        fontSize: "1rem",
+                      }}
+                    >
+                      {/* Collapse/Expand Icon */}
+                      <button
+                        onClick={() =>
+                          setCollapsed((prev) => ({
+                            ...prev,
+                            [wbs.wbsId]: !prev[wbs.wbsId],
+                          }))
+                        }
+                        className="focus:outline-none ml-2 mr-2"
                         style={{
-                          width: `${Object.values(columnWidths)
-                            .reduce((a, b) => a + b, 0)}px`,
-                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          height: 28,
+                          width: 28,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
+                        aria-label={isCollapsed ? "Expand" : "Collapse"}
+                      >
+                        {isCollapsed ? (
+                          <ChevronRight className="text-white w-5 h-5" />
+                        ) : (
+                          <ChevronDown className="text-white w-5 h-5" />
+                        )}
+                      </button>
+                      {/* Dot and Name */}
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          background: "rgba(255,255,255,0.20)",
+                          marginRight: 7,
+                          verticalAlign: "middle",
+                        }}
+                      />
+                      <span
+                        className="font-bold text-white"
+                        style={{ fontSize: "1.05rem", verticalAlign: "middle" }}
                       >
                         {wbs.wbsName}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="ml-2 text-xs px-2 py-1"
-                          onClick={() => addNewTask(wbs.wbsId)}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add Activity
-                        </Button>
-                      </div>
+                      </span>
+                      {/* Add Activity Button */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-3 text-white border border-white/40 font-medium rounded px-2 py-1 hover:bg-white/20"
+                        style={{
+                          fontSize: "0.93rem",
+                          height: 28,
+                          minWidth: 0,
+                          boxShadow: "0 1px 4px 0 rgba(30,100,255,0.04)",
+                          marginLeft: 8,
+                        }}
+                        onClick={() => addNewTask(wbs.wbsId)}
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add Activity
+                      </Button>
                     </div>
                     {/* Activity Rows */}
-                                   {wbs.activities.length === 0 ? (
-                      <div className="flex text-gray-400 text-xs px-4 py-2">No activities yet.</div>
-                    ) : (
-                      wbs.activities.map((task) => {
-                        const weight =
-                          totalManHours > 0
-                            ? ((Number(task.manHours) || 0) / totalManHours)
-                            : 0;
-                        return (
-                          <div
-                            key={task.id}
-                            className={`flex cursor-pointer hover:bg-gray-50 select-none ${
-                              selected.wbsId === wbs.wbsId && selected.taskId === task.id
-                                ? "bg-blue-100"
-                                : ""
-                            }`}
-                            style={{ minHeight: 44 }}
-                            onContextMenu={(e) => handleRowContextMenu(e, wbs.wbsId, task.id)}
-                            onClick={() => setSelected({ wbsId: wbs.wbsId, taskId: task.id })}
-                          >
-                            {/* Code */}
+                    {!isCollapsed && (
+                      wbs.activities.length === 0 ? (
+                        <div className="flex text-gray-400 text-xs px-4 py-2">No activities yet.</div>
+                      ) : (
+                        wbs.activities.map((task) => {
+                          const weight =
+                            totalManHours > 0
+                              ? ((Number(task.manHours) || 0) / totalManHours)
+                              : 0;
+                          return (
                             <div
-                              className="p-2 flex items-center justify-center bg-white sticky left-0 z-10"
-                              style={{
-                                width: `${columnWidths.code}px`,
-                                minHeight: 44,
-                              }}
+                              key={task.id}
+                              className={`flex cursor-pointer hover:bg-gray-50 select-none ${
+                                selected.wbsId === wbs.wbsId && selected.taskId === task.id
+                                  ? "bg-blue-100"
+                                  : ""
+                              }`}
+                              style={{ minHeight: 38 }}
+                              onContextMenu={(e) => handleRowContextMenu(e, wbs.wbsId, task.id)}
+                              onClick={() => setSelected({ wbsId: wbs.wbsId, taskId: task.id })}
                             >
-                              <span className="text-xs font-mono text-gray-600">
-                                {task.code}
-                              </span>
-                            </div>
-                            {/* Description */}
-                            <div
-                              className="p-2 bg-white sticky z-10"
-                              style={{
-                                width: `${columnWidths.description}px`,
-                                left: `${leftMap.description}px`,
-                                minHeight: 44,
-                              }}
-                            >
-                              <Input
-                                value={task.description}
-                                onChange={(e) =>
-                                  updateTask(wbs.wbsId, task.id, "description", e.target.value)
-                                }
-                                placeholder="Enter activity description..."
-                                className="border-0 shadow-none focus:ring-1 focus:ring-blue-300 h-8 text-xs"
-                              />
-                            </div>
-                            {/* Man Hours and Weight (if shown) */}
-                            {showManHours && (
-                              <>
-                                <div
-                                  className="p-2 bg-white sticky z-10 flex items-center justify-center"
-                                  style={{
-                                    width: `${columnWidths.manHours}px`,
-                                    left: `${leftMap.manHours}px`,
-                                    minHeight: 44,
-                                  }}
-                                >
-                                  <NumericInput
-                                    value={task.manHours ?? 0}
-                                    min={0}
-                                    onChange={(e) =>
-                                      updateTask(wbs.wbsId, task.id, "manHours", e.target.value)
-                                    }
-                                  />
-                                </div>
-                                <div
-                                  className="p-2 bg-white sticky z-10 flex items-center justify-center"
-                                  style={{
-                                    width: `${columnWidths.activityWeight}px`,
-                                    left: `${leftMap.activityWeight}px`,
-                                    minHeight: 44,
-                                  }}
-                                >
-                                  <span className="text-xs font-mono text-green-700">
-                                    {(weight * 100).toFixed(1)}%
-                                  </span>
-                                </div>
-                              </>
-                            )}
-                            {/* Start Date */}
-                            <div
-                              className="p-2 bg-white sticky z-10 flex items-center justify-center"
-                              style={{
-                                width: `${columnWidths.startDate}px`,
-                                left: `${leftMap.startDate}px`,
-                                minHeight: 44,
-                              }}
-                            >
-                              <DatePicker
-                                value={task.startDate}
-                                onChange={(date) =>
-                                  date &&
-                                  updateTask(wbs.wbsId, task.id, "startDate", date)
-                                }
-                              />
-                            </div>
-                            {/* Finish Date */}
-                            <div
-                              className="p-2 bg-white sticky z-10 flex items-center justify-center"
-                              style={{
-                                width: `${columnWidths.finishDate}px`,
-                                left: `${leftMap.finishDate}px`,
-                                minHeight: 44,
-                              }}
-                            >
-                              <DatePicker
-                                value={task.finishDate}
-                                onChange={(date) =>
-                                  date &&
-                                  updateTask(wbs.wbsId, task.id, "finishDate", date)
-                                }
-                              />
-                            </div>
-                            {/* Progress */}
-                            <div
-                              className="p-2 bg-white sticky z-10 flex items-center justify-center"
-                              style={{
-                                width: `${columnWidths.progress}px`,
-                                left: `${leftMap.progress}px`,
-                                minHeight: 44,
-                              }}
-                            >
-                              <NumericInput
-                                value={task.progress ?? 0}
-                                min={0}
-                                max={100}
-                                onChange={(e) =>
-                                  updateTask(wbs.wbsId, task.id, "progress", e.target.value)
-                                }
-                              />
-                            </div>
-                            {/* Gantt Timeline */}
-                            <div
-                              className="relative p-2 flex items-center"
-                              style={{
-                                minWidth: ganttMinWidth,
-                                minHeight: 44,
-                                background: "white",
-                              }}
-                            >
-                              <div className="relative w-full h-8">
-                                {shouldShowBar(task) && (
+                              {/* Code */}
+                              <div
+                                className="p-2 flex items-center justify-center bg-white sticky left-0 z-10"
+                                style={{
+                                  width: `${columnWidths.code}px`,
+                                  minHeight: 38,
+                                  fontSize: "0.92rem",
+                                }}
+                              >
+                                <span className="text-xs font-mono text-gray-600">
+                                  {task.code}
+                                </span>
+                              </div>
+                              {/* Description */}
+                              <div
+                                className="p-2 bg-white sticky z-10"
+                                style={{
+                                  width: `${columnWidths.description}px`,
+                                  left: `${leftMap.description}px`,
+                                  minHeight: 38,
+                                }}
+                              >
+                                <Input
+                                  value={task.description}
+                                  onChange={(e) =>
+                                    updateTask(wbs.wbsId, task.id, "description", e.target.value)
+                                  }
+                                  placeholder="Enter activity description..."
+                                  className="border-0 shadow-none focus:ring-1 focus:ring-blue-300 h-8 text-xs"
+                                />
+                              </div>
+                              {/* Man Hours and Weight (if shown) */}
+                              {showManHours && (
+                                <>
                                   <div
-                                    className="absolute top-1 left-0 h-6 w-full bg-gray-200 rounded-none"
-                                    style={getTaskPosition(task)}
+                                    className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                    style={{
+                                      width: `${columnWidths.manHours}px`,
+                                      left: `${leftMap.manHours}px`,
+                                      minHeight: 38,
+                                    }}
                                   >
-                                    <div
-                                      className="h-6 bg-green-500 rounded-none shadow-sm transition-all duration-300"
-                                      style={{
-                                        width: `${Math.max(
-                                          0,
-                                          Math.min(100, Number(task.progress) || 0)
-                                        )}%`,
-                                        minWidth: "0px",
-                                        maxWidth: "100%",
-                                        opacity: task.progress > 0 ? 1 : 0.15,
-                                        borderRadius: 0,
-                                      }}
-                                      title={`${task.code}: ${task.description} (${format(
-                                        task.startDate,
-                                        "MMM dd"
-                                      )} - ${format(task.finishDate, "MMM dd")})`}
+                                    <NumericInput
+                                      value={task.manHours ?? 0}
+                                      min={0}
+                                      onChange={(e) =>
+                                        updateTask(wbs.wbsId, task.id, "manHours", e.target.value)
+                                      }
                                     />
                                   </div>
-                                )}
+                                  <div
+                                    className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                    style={{
+                                      width: `${columnWidths.activityWeight}px`,
+                                      left: `${leftMap.activityWeight}px`,
+                                      minHeight: 38,
+                                    }}
+                                  >
+                                    <span className="text-xs font-mono text-green-700">
+                                      {(weight * 100).toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+                              {/* Start Date */}
+                              <div
+                                className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                style={{
+                                  width: `${columnWidths.startDate}px`,
+                                  left: `${leftMap.startDate}px`,
+                                  minHeight: 38,
+                                }}
+                              >
+                                <DatePicker
+                                  value={task.startDate}
+                                  onChange={(date) =>
+                                    date &&
+                                    updateTask(wbs.wbsId, task.id, "startDate", date)
+                                  }
+                                />
+                              </div>
+                              {/* Finish Date */}
+                              <div
+                                className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                style={{
+                                  width: `${columnWidths.finishDate}px`,
+                                  left: `${leftMap.finishDate}px`,
+                                  minHeight: 38,
+                                }}
+                              >
+                                <DatePicker
+                                  value={task.finishDate}
+                                  onChange={(date) =>
+                                    date &&
+                                    updateTask(wbs.wbsId, task.id, "finishDate", date)
+                                  }
+                                />
+                              </div>
+                              {/* Progress */}
+                              <div
+                                className="p-2 bg-white sticky z-10 flex items-center justify-center"
+                                style={{
+                                  width: `${columnWidths.progress}px`,
+                                  left: `${leftMap.progress}px`,
+                                  minHeight: 38,
+                                }}
+                              >
+                                <NumericInput
+                                  value={task.progress ?? 0}
+                                  min={0}
+                                  max={100}
+                                  onChange={(e) =>
+                                    updateTask(wbs.wbsId, task.id, "progress", e.target.value)
+                                  }
+                                />
+                              </div>
+                              {/* Gantt Timeline */}
+                              <div
+                                className="relative p-2 flex items-center"
+                                style={{
+                                  minWidth: ganttMinWidth,
+                                  minHeight: 38,
+                                  background: "white",
+                                }}
+                              >
+                                <div className="relative w-full h-8">
+                                  {shouldShowBar(task) && (
+                                    <div
+                                      className="absolute top-1 left-0 h-6 w-full bg-gray-200 rounded-none"
+                                      style={getTaskPosition(task)}
+                                    >
+                                      <div
+                                        className="h-6 bg-green-500 rounded-none shadow-sm transition-all duration-300"
+                                        style={{
+                                          width: `${Math.max(
+                                            0,
+                                            Math.min(100, Number(task.progress) || 0)
+                                          )}%`,
+                                          minWidth: "0px",
+                                          maxWidth: "100%",
+                                          opacity: task.progress > 0 ? 1 : 0.15,
+                                          borderRadius: 0,
+                                        }}
+                                        title={`${task.code}: ${task.description} (${format(
+                                          task.startDate,
+                                          "MMM dd"
+                                        )} - ${format(task.finishDate, "MMM dd")})`}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })
+                      )
                     )}
                   </React.Fragment>
                 );
@@ -725,4 +854,3 @@ const GanttChart = () => {
 };
 
 export default GanttChart;
-
