@@ -159,7 +159,7 @@ const GanttChart = () => {
 
   const [columnWidths, setColumnWidths] = useState({
     code: 80,
-    description: 200,
+    description: 280,
     manHours: 90,
     activityWeight: 110,
     startDate: 120,
@@ -485,7 +485,7 @@ const GanttChart = () => {
   const totalColumnsWidth = headerCols.reduce((sum, col) => sum + (columnWidths[col.key] || 90), 0);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 w-full min-h-screen">
       {/* Context Menu */}
       {contextMenu.visible && (
         <div
@@ -511,7 +511,7 @@ const GanttChart = () => {
         </div>
       )}
 
-      <Card className="mb-6">
+      <Card className="mb-6 w-full">
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <span className="inline-block font-semibold text-lg text-green-700">
             Overall Progress: {overallProgress.toFixed(1)}%
@@ -572,7 +572,7 @@ const GanttChart = () => {
         </CardHeader>
         <CardContent>
           {/* Gantt Chart */}
-          <div className="border rounded-lg overflow-auto max-h-96">
+          <div className="border rounded-lg overflow-auto" style={{ height: "70vh" }}>
             <div className="min-w-max relative">
               {/* Header */}
               <div className="bg-gray-100 border-b sticky top-0 z-20">
@@ -633,86 +633,55 @@ const GanttChart = () => {
                 const summary = wbsSummaries[wbsIndex];
                 return (
                   <React.Fragment key={wbs.wbsId}>
-                    {/* WBS Row - Completely fixed on horizontal scroll */}
+                    {/* WBS Row - Fixed positioning with proper alignment */}
                     <div
-                      className="relative"
+                      className="flex items-center sticky left-0 z-15"
                       style={{
                         background: `linear-gradient(90deg, ${wbs.color}, #4d9dff 80%)`,
                         minHeight: 50,
                         marginTop: 5,
                         borderTopLeftRadius: 8,
                         borderTopRightRadius: 8,
-                        position: "sticky",
-                        left: 0,
-                        zIndex: 15,
-                        width: "100%",
+                        fontSize: "1rem",
                       }}
                     >
-                      <div className="flex items-center h-full">
-                        {/* Collapse/Expand Icon */}
-                        <button
-                          onClick={() =>
-                            setCollapsed((prev) => ({
-                              ...prev,
-                              [wbs.wbsId]: !prev[wbs.wbsId],
-                            }))
-                          }
-                          className="focus:outline-none ml-2 mr-2"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            padding: 0,
-                            height: 28,
-                            width: 28,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          aria-label={isCollapsed ? "Expand" : "Collapse"}
-                        >
-                          {isCollapsed ? (
-                            <ChevronRight className="text-white w-5 h-5" />
-                          ) : (
-                            <ChevronDown className="text-white w-5 h-5" />
-                          )}
-                        </button>
+                      {/* Collapse/Expand Icon */}
+                      <button
+                        onClick={() =>
+                          setCollapsed((prev) => ({
+                            ...prev,
+                            [wbs.wbsId]: !prev[wbs.wbsId],
+                          }))
+                        }
+                        className="focus:outline-none ml-2 mr-2"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          height: 28,
+                          width: 28,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        aria-label={isCollapsed ? "Expand" : "Collapse"}
+                      >
+                        {isCollapsed ? (
+                          <ChevronRight className="text-white w-5 h-5" />
+                        ) : (
+                          <ChevronDown className="text-white w-5 h-5" />
+                        )}
+                      </button>
+                      
+                      {/* WBS Name starting from Code column through Description column */}
+                      <div className="text-left text-white font-bold flex items-center" style={{ width: `${columnWidths.code + columnWidths.description - 60}px`, fontSize: "1.05rem", paddingLeft: "8px" }}>
+                        {wbs.wbsName}
                         
-                        {/* WBS Name */}
-                        <span
-                          className="font-bold text-white mr-4"
-                          style={{ fontSize: "1.05rem" }}
-                        >
-                          {wbs.wbsName}
-                        </span>
-                        
-                        {/* WBS Summary Information positioned to align with columns */}
-                        <div className="flex items-center text-white text-xs" style={{ marginLeft: `${leftMap.description - 100}px` }}>
-                          {showManHours && (
-                            <>
-                              <span className="text-center" style={{ width: `${columnWidths.manHours}px`, marginRight: `${leftMap.activityWeight - leftMap.manHours - columnWidths.manHours}px` }}>
-                                {summary.totalManHours}
-                              </span>
-                              <span className="text-center" style={{ width: `${columnWidths.activityWeight}px`, marginRight: `${leftMap.startDate - leftMap.activityWeight - columnWidths.activityWeight}px` }}>
-                                {summary.totalWeight.toFixed(1)}%
-                              </span>
-                            </>
-                          )}
-                          <span className="text-center" style={{ width: `${columnWidths.startDate}px`, marginRight: `${leftMap.finishDate - leftMap.startDate - columnWidths.startDate}px` }}>
-                            {summary.earliestStart ? format(summary.earliestStart, "MMM dd") : "-"}
-                          </span>
-                          <span className="text-center" style={{ width: `${columnWidths.finishDate}px`, marginRight: `${leftMap.progress - leftMap.finishDate - columnWidths.finishDate}px` }}>
-                            {summary.latestFinish ? format(summary.latestFinish, "MMM dd") : "-"}
-                          </span>
-                          <span className="text-center" style={{ width: `${columnWidths.progress}px` }}>
-                            {summary.progress.toFixed(1)}%
-                          </span>
-                        </div>
-
-                        {/* Add Activity Button */}
+                        {/* Add Activity Button positioned near WBS name */}
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="ml-auto mr-3 text-white border border-white/40 font-medium rounded px-2 py-1 hover:bg-white/20"
+                          className="ml-4 text-white border border-white/40 font-medium rounded px-2 py-1 hover:bg-white/20"
                           style={{
                             fontSize: "0.93rem",
                             height: 28,
@@ -725,6 +694,30 @@ const GanttChart = () => {
                           Add Activity
                         </Button>
                       </div>
+                      
+                      {/* WBS Summary Information aligned with respective columns */}
+                      {showManHours && (
+                        <>
+                          <div className="text-center text-white text-xs" style={{ width: `${columnWidths.manHours}px` }}>
+                            {summary.totalManHours}
+                          </div>
+                          <div className="text-center text-white text-xs" style={{ width: `${columnWidths.activityWeight}px` }}>
+                            {summary.totalWeight.toFixed(1)}%
+                          </div>
+                        </>
+                      )}
+                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.startDate}px` }}>
+                        {summary.earliestStart ? format(summary.earliestStart, "MMM dd") : "-"}
+                      </div>
+                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.finishDate}px` }}>
+                        {summary.latestFinish ? format(summary.latestFinish, "MMM dd") : "-"}
+                      </div>
+                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.progress}px` }}>
+                        {summary.progress.toFixed(1)}%
+                      </div>
+
+                      {/* Fill remaining space */}
+                      <div className="flex-1" />
                     </div>
                     
                     {/* Activity Rows */}
@@ -747,172 +740,181 @@ const GanttChart = () => {
                           return (
                             <div
                               key={task.id}
-                              className={`flex cursor-pointer hover:bg-gray-50 select-none relative ${
+                              className={`relative cursor-pointer hover:bg-gray-50 select-none ${
                                 selected.wbsId === wbs.wbsId && selected.taskId === task.id
                                   ? "bg-blue-100"
                                   : ""
                               }`}
                               style={{ 
                                 minHeight: 38,
-                                zIndex: 5
+                                zIndex: 5,
+                                width: "100%"
                               }}
                               onContextMenu={(e) => handleRowContextMenu(e, wbs.wbsId, task.id)}
                               onClick={() => setSelected({ wbsId: wbs.wbsId, taskId: task.id })}
                             >
-                              {/* Code */}
-                              <div
-                                className="p-2 flex items-center justify-center bg-white sticky left-0 z-15"
-                                style={{
-                                  width: `${columnWidths.code}px`,
-                                  minHeight: 38,
-                                  fontSize: "0.92rem",
-                                }}
-                              >
-                                <span className="text-xs font-mono text-gray-600">
-                                  {task.code}
-                                </span>
-                              </div>
-                              {/* Description */}
-                              <div
-                                className="p-2 bg-white sticky z-15"
-                                style={{
-                                  width: `${columnWidths.description}px`,
-                                  left: `${leftMap.description}px`,
-                                  minHeight: 38,
-                                }}
-                              >
-                                <Input
-                                  value={task.description}
-                                  onChange={(e) =>
-                                    updateTask(wbs.wbsId, task.id, "description", e.target.value)
-                                  }
-                                  placeholder="Enter activity description..."
-                                  className="border-0 shadow-none focus:ring-1 focus:ring-blue-300 h-8 text-xs"
-                                />
-                              </div>
-                              {/* Man Hours and Weight (if shown) */}
-                              {showManHours && (
-                                <>
-                                  <div
-                                    className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                    style={{
-                                      width: `${columnWidths.manHours}px`,
-                                      left: `${leftMap.manHours}px`,
-                                      minHeight: 38,
-                                    }}
-                                  >
-                                    <NumericInput
-                                      value={task.manHours ?? 0}
-                                      min={0}
-                                      onChange={(e) =>
-                                        updateTask(wbs.wbsId, task.id, "manHours", e.target.value)
-                                      }
-                                    />
-                                  </div>
-                                  <div
-                                    className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                    style={{
-                                      width: `${columnWidths.activityWeight}px`,
-                                      left: `${leftMap.activityWeight}px`,
-                                      minHeight: 38,
-                                    }}
-                                  >
-                                    <span className="text-xs font-mono text-green-700">
-                                      {(weight * 100).toFixed(1)}%
-                                    </span>
-                                  </div>
-                                </>
-                              )}
-                              {/* Start Date */}
-                              <div
-                                className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                style={{
-                                  width: `${columnWidths.startDate}px`,
-                                  left: `${leftMap.startDate}px`,
-                                  minHeight: 38,
-                                }}
-                              >
-                                <DatePicker
-                                  value={task.startDate}
-                                  onChange={(date) =>
-                                    date &&
-                                    updateTask(wbs.wbsId, task.id, "startDate", date)
-                                  }
-                                />
-                              </div>
-                              {/* Finish Date */}
-                              <div
-                                className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                style={{
-                                  width: `${columnWidths.finishDate}px`,
-                                  left: `${leftMap.finishDate}px`,
-                                  minHeight: 38,
-                                }}
-                              >
-                                <DatePicker
-                                  value={task.finishDate}
-                                  onChange={(date) =>
-                                    date &&
-                                    updateTask(wbs.wbsId, task.id, "finishDate", date)
-                                  }
-                                />
-                              </div>
-                              {/* Progress */}
-                              <div
-                                className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                style={{
-                                  width: `${columnWidths.progress}px`,
-                                  left: `${leftMap.progress}px`,
-                                  minHeight: 38,
-                                }}
-                              >
-                                <NumericInput
-                                  value={task.progress ?? 0}
-                                  min={0}
-                                  max={100}
-                                  onChange={(e) =>
-                                    updateTask(wbs.wbsId, task.id, "progress", e.target.value)
-                                  }
-                                />
-                              </div>
-                              {/* Gantt Timeline */}
-                              <div
-                                className="relative p-2 flex items-center"
-                                style={{
-                                  minWidth: ganttMinWidth,
-                                  minHeight: 38,
-                                  background: "white",
-                                }}
-                              >
-                                <div className="relative w-full h-8">
-                                  {shouldShowBar(task) && (
+                              <div className="flex">
+                                {/* Code */}
+                                <div
+                                  className="p-2 flex items-center justify-center bg-white sticky left-0 z-15"
+                                  style={{
+                                    width: `${columnWidths.code}px`,
+                                    minHeight: 38,
+                                    fontSize: "0.92rem",
+                                  }}
+                                >
+                                  <span className="text-xs font-mono text-gray-600">
+                                    {task.code}
+                                  </span>
+                                </div>
+                                {/* Description */}
+                                <div
+                                  className="p-2 bg-white sticky z-15"
+                                  style={{
+                                    width: `${columnWidths.description}px`,
+                                    left: `${leftMap.description}px`,
+                                    minHeight: 38,
+                                  }}
+                                >
+                                  <Input
+                                    value={task.description}
+                                    onChange={(e) =>
+                                      updateTask(wbs.wbsId, task.id, "description", e.target.value)
+                                    }
+                                    placeholder="Enter activity description..."
+                                    className="border-0 shadow-none focus:ring-1 focus:ring-blue-300 h-8 text-xs"
+                                  />
+                                </div>
+                                {/* Man Hours and Weight (if shown) */}
+                                {showManHours && (
+                                  <>
                                     <div
-                                      className="absolute top-1 left-0 h-6 w-full bg-gray-200 rounded-none"
-                                      style={getTaskPosition(task)}
+                                      className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                      style={{
+                                        width: `${columnWidths.manHours}px`,
+                                        left: `${leftMap.manHours}px`,
+                                        minHeight: 38,
+                                      }}
                                     >
-                                      <div
-                                        className="h-6 bg-green-500 rounded-none shadow-sm transition-all duration-300"
-                                        style={{
-                                          width: `${Math.max(
-                                            0,
-                                            Math.min(100, Number(task.progress) || 0)
-                                          )}%`,
-                                          minWidth: "0px",
-                                          maxWidth: "100%",
-                                          opacity: task.progress > 0 ? 1 : 0.15,
-                                          borderRadius: 0,
-                                        }}
-                                        title={`${task.code}: ${task.description} (${format(
-                                          task.startDate,
-                                          "MMM dd"
-                                        )} - ${format(task.finishDate, "MMM dd")})`}
+                                      <NumericInput
+                                        value={task.manHours ?? 0}
+                                        min={0}
+                                        onChange={(e) =>
+                                          updateTask(wbs.wbsId, task.id, "manHours", e.target.value)
+                                        }
                                       />
                                     </div>
-                                  )}
+                                    <div
+                                      className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                      style={{
+                                        width: `${columnWidths.activityWeight}px`,
+                                        left: `${leftMap.activityWeight}px`,
+                                        minHeight: 38,
+                                      }}
+                                    >
+                                      <span className="text-xs font-mono text-green-700">
+                                        {(weight * 100).toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                                {/* Start Date */}
+                                <div
+                                  className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                  style={{
+                                    width: `${columnWidths.startDate}px`,
+                                    left: `${leftMap.startDate}px`,
+                                    minHeight: 38,
+                                  }}
+                                >
+                                  <div className="w-full">
+                                    <DatePicker
+                                      value={task.startDate}
+                                      onChange={(date) =>
+                                        date &&
+                                        updateTask(wbs.wbsId, task.id, "startDate", date)
+                                      }
+                                      className="border-0 shadow-none focus:border focus:border-blue-300"
+                                    />
+                                  </div>
+                                </div>
+                                {/* Finish Date */}
+                                <div
+                                  className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                  style={{
+                                    width: `${columnWidths.finishDate}px`,
+                                    left: `${leftMap.finishDate}px`,
+                                    minHeight: 38,
+                                  }}
+                                >
+                                  <div className="w-full">
+                                    <DatePicker
+                                      value={task.finishDate}
+                                      onChange={(date) =>
+                                        date &&
+                                        updateTask(wbs.wbsId, task.id, "finishDate", date)
+                                      }
+                                      className="border-0 shadow-none focus:border focus:border-blue-300"
+                                    />
+                                  </div>
+                                </div>
+                                {/* Progress */}
+                                <div
+                                  className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                  style={{
+                                    width: `${columnWidths.progress}px`,
+                                    left: `${leftMap.progress}px`,
+                                    minHeight: 38,
+                                  }}
+                                >
+                                  <NumericInput
+                                    value={task.progress ?? 0}
+                                    min={0}
+                                    max={100}
+                                    onChange={(e) =>
+                                      updateTask(wbs.wbsId, task.id, "progress", e.target.value)
+                                    }
+                                  />
+                                </div>
+                                {/* Gantt Timeline */}
+                                <div
+                                  className="relative p-2 flex items-center"
+                                  style={{
+                                    minWidth: ganttMinWidth,
+                                    minHeight: 38,
+                                    background: "white",
+                                  }}
+                                >
+                                  <div className="relative w-full h-8">
+                                    {shouldShowBar(task) && (
+                                      <div
+                                        className="absolute top-1 left-0 h-6 w-full bg-gray-200 rounded-none"
+                                        style={getTaskPosition(task)}
+                                      >
+                                        <div
+                                          className="h-6 bg-green-500 rounded-none shadow-sm transition-all duration-300"
+                                          style={{
+                                            width: `${Math.max(
+                                              0,
+                                              Math.min(100, Number(task.progress) || 0)
+                                            )}%`,
+                                            minWidth: "0px",
+                                            maxWidth: "100%",
+                                            opacity: task.progress > 0 ? 1 : 0.15,
+                                            borderRadius: 0,
+                                          }}
+                                          title={`${task.code}: ${task.description} (${format(
+                                            task.startDate,
+                                            "MMM dd"
+                                          )} - ${format(task.finishDate, "MMM dd")})`}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               
-                              {/* Full-width activity divider line */}
+                              {/* Blue horizontal line spanning complete row width */}
                               <div 
                                 className="absolute bottom-0 left-0 h-px bg-blue-400"
                                 style={{ 
