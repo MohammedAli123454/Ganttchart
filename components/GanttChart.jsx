@@ -4,81 +4,22 @@ import { Plus, Settings2, ChevronDown, ChevronRight, ChevronsDownUp } from "luci
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { DatePicker } from "../components/date-picker";
 import { NumericInput } from "../components/NumericInput";
+import { addDays, addWeeks, addMonths, differenceInDays, format, startOfDay, endOfDay } from "../lib/dateUtils";
 
-// --- Popover ---
-function Popover({ open, onClose, children, trigger }) {
-  const ref = useRef();
-  React.useEffect(() => {
-    if (!open) return;
-    const handle = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) onClose();
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [open, onClose]);
-  return (
-    <div className="relative">
-      {trigger}
-      {open && (
-        <div
-          ref={ref}
-          className="absolute right-0 mt-2 bg-white rounded shadow-lg border border-gray-200 z-30 min-w-[230px] p-4"
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-import {
-  addDays,
-  addWeeks,
-  addMonths,
-  differenceInDays,
-  format,
-  startOfDay,
-  endOfDay,
-} from "../lib/dateUtils";
-
+// --- Initial Data ---
 const initialWBS = [
   {
     wbsId: "wbs1",
     wbsName: "Engineering",
     color: "#388bff",
     activities: [
-      {
-        id: "1",
-        code: "ENG-001",
-        description: "Basic Design",
-        manHours: 30,
-        startDate: new Date(2025, 5, 20),
-        finishDate: new Date(2025, 5, 30),
-        progress: 60,
-      },
-      {
-        id: "2",
-        code: "ENG-002",
-        description: "Detail Design",
-        manHours: 25,
-        startDate: new Date(2025, 5, 25),
-        finishDate: new Date(2025, 6, 10),
-        progress: 40,
-      },
+      { id: "1", code: "ENG-001", description: "Basic Design", manHours: 30, startDate: new Date(2025, 5, 20), finishDate: new Date(2025, 5, 30), progress: 60 },
+      { id: "2", code: "ENG-002", description: "Detail Design", manHours: 25, startDate: new Date(2025, 5, 25), finishDate: new Date(2025, 6, 10), progress: 40 },
     ],
   },
   {
@@ -86,24 +27,8 @@ const initialWBS = [
     wbsName: "Procurement",
     color: "#1e90ff",
     activities: [
-      {
-        id: "3",
-        code: "PRC-001",
-        description: "Vendor Selection",
-        manHours: 20,
-        startDate: new Date(2025, 6, 1),
-        finishDate: new Date(2025, 6, 10),
-        progress: 70,
-      },
-      {
-        id: "4",
-        code: "PRC-002",
-        description: "Purchase Order",
-        manHours: 15,
-        startDate: new Date(2025, 6, 11),
-        finishDate: new Date(2025, 6, 20),
-        progress: 25,
-      },
+      { id: "3", code: "PRC-001", description: "Vendor Selection", manHours: 20, startDate: new Date(2025, 6, 1), finishDate: new Date(2025, 6, 10), progress: 70 },
+      { id: "4", code: "PRC-002", description: "Purchase Order", manHours: 15, startDate: new Date(2025, 6, 11), finishDate: new Date(2025, 6, 20), progress: 25 },
     ],
   },
   {
@@ -111,66 +36,87 @@ const initialWBS = [
     wbsName: "Construction",
     color: "#2778f0",
     activities: [
-      {
-        id: "5",
-        code: "CON-001",
-        description: "Site Mobilization",
-        manHours: 50,
-        startDate: new Date(2025, 6, 15),
-        finishDate: new Date(2025, 6, 25),
-        progress: 10,
-      },
-      {
-        id: "6",
-        code: "CON-002",
-        description: "Civil Works",
-        manHours: 40,
-        startDate: new Date(2025, 6, 18),
-        finishDate: new Date(2025, 7, 1),
-        progress: 5,
-      },
+      { id: "5", code: "CON-001", description: "Site Mobilization", manHours: 50, startDate: new Date(2025, 6, 15), finishDate: new Date(2025, 6, 25), progress: 10 },
+      { id: "6", code: "CON-002", description: "Civil Works", manHours: 40, startDate: new Date(2025, 6, 18), finishDate: new Date(2025, 7, 1), progress: 5 },
     ],
   },
 ];
 
-const generateTaskCode = (wbsId, activities) =>
-  `${wbsId.split("-")[0].toUpperCase()}-${String(activities.length + 1).padStart(3, "0")}`;
+const generateTaskCode = (wbsId, activities) => `${wbsId.split("-")[0].toUpperCase()}-${String(activities.length + 1).padStart(3, "0")}`;
 
+// --- Fixed Context Menu Component ---
+function ContextMenuPopover({ open, onOpenChange, onDelete, anchorRef }) {
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <div
+          ref={anchorRef}
+          className="absolute invisible"
+          style={{ pointerEvents: 'none' }}
+        />
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[160px]" side="bottom" align="start">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start text-red-600 hover:bg-red-50" 
+          onClick={onDelete}
+        >
+          Delete Activity
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// --- Column Resizer for Table ---
+const ColumnResizer = ({ onMouseDown }) => (
+  <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400" onMouseDown={onMouseDown} style={{ zIndex: 35 }} />
+);
+
+const headerColsDef = (showManHours) => [
+  { key: "code", label: "Code" },
+  { key: "description", label: "Activity Description" },
+  ...(showManHours
+    ? [
+        { key: "manHours", label: "Man Hours" },
+        { key: "activityWeight", label: "Activity Weight (%)" },
+      ]
+    : []),
+  { key: "startDate", label: "Start Date" },
+  { key: "finishDate", label: "Finish Date" },
+  { key: "progress", label: "Progress (%)" },
+];
+
+// --- Main Gantt Chart Component ---
 const GanttChart = () => {
   const [wbsList, setWbsList] = useState(initialWBS);
   const [showManHours, setShowManHours] = useState(true);
   const [viewMode, setViewMode] = useState("week");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState({ wbsId: null, taskId: null });
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, wbsId: null, taskId: null });
-  const contextMenuRef = useRef(null);
+  const [contextMenu, setContextMenu] = useState({ 
+    visible: false, 
+    wbsId: null, 
+    taskId: null, 
+    x: 0, 
+    y: 0 
+  });
+  
+  // Ref for the context menu anchor
+  const contextMenuAnchorRef = useRef(null);
 
   // Collapsible state for each WBS
-  const [collapsed, setCollapsed] = useState(
-    Object.fromEntries(initialWBS.map(wbs => [wbs.wbsId, false]))
-  );
-  // Collapsed/expanded all
-  const allCollapsed = Object.values(collapsed).every(v => v);
-  const toggleAll = (forceExpand) => {
-    setCollapsed(
-      Object.fromEntries(wbsList.map(wbs => [wbs.wbsId, !forceExpand]))
-    );
-  };
-
+  const [collapsed, setCollapsed] = useState(Object.fromEntries(initialWBS.map(wbs => [wbs.wbsId, false])));
+  const allCollapsed = Object.values(collapsed).every(Boolean);
+  const toggleAll = (forceExpand) => setCollapsed(Object.fromEntries(wbsList.map(wbs => [wbs.wbsId, !forceExpand])));
   const [columnWidths, setColumnWidths] = useState({
-    code: 80,
-    description: 280,
-    manHours: 90,
-    activityWeight: 110,
-    startDate: 120,
-    finishDate: 120,
-    progress: 90,
+    code: 80, description: 280, manHours: 90, activityWeight: 110, startDate: 120, finishDate: 120, progress: 90,
   });
   const [isResizing, setIsResizing] = useState(null);
   const [startX, setStartX] = useState(0);
   const [startWidth, setStartWidth] = useState(0);
 
-  // Drag-resize columns
+  // --- Drag-resize columns ---
   const handleMouseDown = (e, column) => {
     setIsResizing(column);
     setStartX(e.clientX);
@@ -181,10 +127,7 @@ const GanttChart = () => {
     if (!isResizing) return;
     const diff = e.clientX - startX;
     const newWidth = Math.max(50, startWidth + diff);
-    setColumnWidths((prev) => ({
-      ...prev,
-      [isResizing]: newWidth,
-    }));
+    setColumnWidths((prev) => ({ ...prev, [isResizing]: newWidth }));
   };
   const handleMouseUp = () => setIsResizing(null);
 
@@ -201,139 +144,60 @@ const GanttChart = () => {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-  }, [isResizing, startX, startWidth]);
-
-  React.useEffect(() => {
-    const handleClick = (e) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
-        setContextMenu((cm) => ({ ...cm, visible: false }));
-      }
-    };
-    if (contextMenu.visible) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [contextMenu.visible]);
+  }, [isResizing]);
 
   // Weighted progress and man hours
-  const allActivities = useMemo(
-    () => wbsList.flatMap((wbs) =>
-      wbs.activities.map((act) => ({ ...act, wbsId: wbs.wbsId }))
-    ),
-    [wbsList]
-  );
-  const totalManHours = useMemo(
-    () => allActivities.reduce((sum, t) => sum + (Number(t.manHours) || 0), 0),
-    [allActivities]
-  );
+  const allActivities = useMemo(() => wbsList.flatMap(wbs => wbs.activities.map(act => ({ ...act, wbsId: wbs.wbsId }))), [wbsList]);
+  const totalManHours = useMemo(() => allActivities.reduce((sum, t) => sum + (Number(t.manHours) || 0), 0), [allActivities]);
   const weightedProgresses = useMemo(
-    () =>
-      allActivities.map((t) => ({
-        weight: totalManHours ? (Number(t.manHours) || 0) / totalManHours : 0,
-        progress: Math.max(0, Math.min(100, Number(t.progress) || 0)),
-      })),
+    () => allActivities.map(t => ({
+      weight: totalManHours ? (Number(t.manHours) || 0) / totalManHours : 0,
+      progress: Math.max(0, Math.min(100, Number(t.progress) || 0)),
+    })),
     [allActivities, totalManHours]
   );
-  const overallProgress = useMemo(
-    () => weightedProgresses.reduce((sum, t) => sum + t.weight * t.progress, 0),
-    [weightedProgresses]
-  );
+  const overallProgress = useMemo(() => weightedProgresses.reduce((sum, t) => sum + t.weight * t.progress, 0), [weightedProgresses]);
 
   // WBS Summary calculations
-  const wbsSummaries = useMemo(() => {
-    return wbsList.map(wbs => {
-      const activities = wbs.activities;
-      if (activities.length === 0) {
-        return {
-          totalManHours: 0,
-          totalWeight: 0,
-          earliestStart: null,
-          latestFinish: null,
-          progress: 0,
-        };
-      }
-
-      const totalWbsManHours = activities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
-      const totalWeight = totalManHours > 0 ? (totalWbsManHours / totalManHours) * 100 : 0;
-      
-      const validDates = activities.filter(act => 
-        act.startDate && act.finishDate && 
-        !isNaN(act.startDate.getTime()) && !isNaN(act.finishDate.getTime())
-      );
-      
-      const earliestStart = validDates.length > 0 
-        ? new Date(Math.min(...validDates.map(act => act.startDate.getTime())))
-        : null;
-      
-      const latestFinish = validDates.length > 0
-        ? new Date(Math.max(...validDates.map(act => act.finishDate.getTime())))
-        : null;
-
-      // Calculate WBS progress as weighted average of activities within this WBS
-      const wbsProgress = totalWbsManHours > 0
-        ? activities.reduce((sum, act) => {
-            const actWeight = (Number(act.manHours) || 0) / totalWbsManHours;
-            const actProgress = Math.max(0, Math.min(100, Number(act.progress) || 0));
-            return sum + (actWeight * actProgress);
-          }, 0)
-        : 0;
-
-      return {
-        totalManHours: totalWbsManHours,
-        totalWeight,
-        earliestStart,
-        latestFinish,
-        progress: wbsProgress,
-      };
-    });
-  }, [wbsList, totalManHours]);
+  const wbsSummaries = useMemo(() => wbsList.map(wbs => {
+    const activities = wbs.activities;
+    if (activities.length === 0) {
+      return { totalManHours: 0, totalWeight: 0, earliestStart: null, latestFinish: null, progress: 0 };
+    }
+    const totalWbsManHours = activities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
+    const totalWeight = totalManHours > 0 ? (totalWbsManHours / totalManHours) * 100 : 0;
+    const validDates = activities.filter(act => act.startDate && act.finishDate && !isNaN(act.startDate.getTime()) && !isNaN(act.finishDate.getTime()));
+    const earliestStart = validDates.length > 0 ? new Date(Math.min(...validDates.map(act => act.startDate.getTime()))) : null;
+    const latestFinish = validDates.length > 0 ? new Date(Math.max(...validDates.map(act => act.finishDate.getTime()))) : null;
+    const wbsProgress = totalWbsManHours > 0
+      ? activities.reduce((sum, act) => sum + ((Number(act.manHours) || 0) / totalWbsManHours) * Math.max(0, Math.min(100, Number(act.progress) || 0)), 0)
+      : 0;
+    return { totalManHours: totalWbsManHours, totalWeight, earliestStart, latestFinish, progress: wbsProgress };
+  }), [wbsList, totalManHours]);
 
   // Timeline data (min/max dates)
   const chartData = useMemo(() => {
     const validTasks = allActivities.filter(
-      (task) =>
-        task.startDate &&
-        task.finishDate &&
-        !isNaN(task.startDate.getTime()) &&
-        !isNaN(task.finishDate.getTime())
+      (task) => task.startDate && task.finishDate && !isNaN(task.startDate.getTime()) && !isNaN(task.finishDate.getTime())
     );
     if (validTasks.length === 0) {
       const today = new Date();
-      return {
-        startDate: startOfDay(addDays(today, -7)),
-        endDate: endOfDay(addDays(today, 30)),
-        timeUnits: [],
-      };
+      return { startDate: startOfDay(addDays(today, -7)), endDate: endOfDay(addDays(today, 30)), timeUnits: [] };
     }
-    const allDates = validTasks.flatMap((task) => [
-      task.startDate,
-      task.finishDate,
-    ]);
+    const allDates = validTasks.flatMap((task) => [task.startDate, task.finishDate]);
     const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
     const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
     const startDate = startOfDay(addDays(minDate, -7));
     const endDate = endOfDay(addDays(maxDate, 7));
-
     const timeUnits = [];
     let currentDate = new Date(startDate);
     while (currentDate <= endDate) {
-      let label = "",
-        nextDate;
+      let label = "", nextDate;
       switch (viewMode) {
-        case "day":
-          label = format(currentDate, "MMM dd");
-          nextDate = addDays(currentDate, 1);
-          break;
-        case "week":
-          label = format(currentDate, "MMM dd");
-          nextDate = addWeeks(currentDate, 1);
-          break;
-        case "month":
-          label = format(currentDate, "MMM yyyy");
-          nextDate = addMonths(currentDate, 1);
-          break;
-        default:
-          label = format(currentDate, "MMM dd");
-          nextDate = addWeeks(currentDate, 1);
-          break;
+        case "day": label = format(currentDate, "MMM dd"); nextDate = addDays(currentDate, 1); break;
+        case "week": label = format(currentDate, "MMM dd"); nextDate = addWeeks(currentDate, 1); break;
+        case "month": label = format(currentDate, "MMM yyyy"); nextDate = addMonths(currentDate, 1); break;
+        default: label = format(currentDate, "MMM dd"); nextDate = addWeeks(currentDate, 1); break;
       }
       timeUnits.push({ label, date: new Date(currentDate) });
       currentDate = nextDate;
@@ -341,23 +205,16 @@ const GanttChart = () => {
     return { startDate, endDate, timeUnits };
   }, [allActivities, viewMode]);
 
+  // Helpers
   const addNewTask = (wbsId) => {
-    setWbsList((prev) =>
-      prev.map((wbs) =>
+    setWbsList(prev =>
+      prev.map(wbs =>
         wbs.wbsId === wbsId
           ? {
               ...wbs,
               activities: [
                 ...wbs.activities,
-                {
-                  id: Date.now().toString(),
-                  code: generateTaskCode(wbsId, wbs.activities),
-                  description: "",
-                  manHours: 0,
-                  startDate: new Date(),
-                  finishDate: addDays(new Date(), 7),
-                  progress: 0,
-                },
+                { id: Date.now().toString(), code: generateTaskCode(wbsId, wbs.activities), description: "", manHours: 0, startDate: new Date(), finishDate: addDays(new Date(), 7), progress: 0 },
               ],
             }
           : wbs
@@ -367,20 +224,18 @@ const GanttChart = () => {
   };
 
   const updateTask = (wbsId, id, field, value) => {
-    setWbsList((prev) =>
-      prev.map((wbs) =>
+    setWbsList(prev =>
+      prev.map(wbs =>
         wbs.wbsId === wbsId
           ? {
               ...wbs,
-              activities: wbs.activities.map((task) =>
+              activities: wbs.activities.map(task =>
                 task.id === id
                   ? {
                       ...task,
                       [field]:
                         field === "startDate" || field === "finishDate"
-                          ? value
-                            ? new Date(value)
-                            : null
+                          ? value ? new Date(value) : null
                           : field === "progress"
                           ? Math.max(0, Math.min(100, Number(value) || 0))
                           : field === "manHours"
@@ -395,13 +250,9 @@ const GanttChart = () => {
     );
   };
 
+  // Task bar position
   const getTaskPosition = (task) => {
-    if (
-      !task.startDate ||
-      !task.finishDate ||
-      isNaN(task.startDate.getTime()) ||
-      isNaN(task.finishDate.getTime())
-    ) {
+    if (!task.startDate || !task.finishDate || isNaN(task.startDate.getTime()) || isNaN(task.finishDate.getTime())) {
       return { left: "0px", width: "0px" };
     }
     const totalDays = differenceInDays(chartData.endDate, chartData.startDate);
@@ -411,155 +262,87 @@ const GanttChart = () => {
     const totalWidth = chartData.timeUnits.length * columnWidth;
     const left = (taskStart / totalDays) * totalWidth;
     const width = (taskDuration / totalDays) * totalWidth;
-    return {
-      left: `${Math.max(0, left)}px`,
-      width: `${Math.max(10, width)}px`,
-    };
+    return { left: `${Math.max(0, left)}px`, width: `${Math.max(10, width)}px` };
   };
-
   const shouldShowBar = (task) =>
-    task.description.trim() !== "" &&
-    task.startDate &&
-    task.finishDate &&
-    !isNaN(task.startDate.getTime()) &&
-    !isNaN(task.finishDate.getTime());
+    task.description.trim() !== "" && task.startDate && task.finishDate && !isNaN(task.startDate.getTime()) && !isNaN(task.finishDate.getTime());
 
-  // Context menu logic
+  // Fixed context menu logic
   const handleRowContextMenu = (e, wbsId, taskId) => {
     e.preventDefault();
-    setContextMenu({
-      visible: true,
-      x: e.clientX,
-      y: e.clientY,
-      wbsId,
-      taskId,
+    e.stopPropagation();
+    
+    // Position the anchor element at the click position
+    if (contextMenuAnchorRef.current) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      contextMenuAnchorRef.current.style.left = `${e.clientX - rect.left}px`;
+      contextMenuAnchorRef.current.style.top = `${e.clientY - rect.top}px`;
+    }
+    
+    setContextMenu({ 
+      visible: true, 
+      wbsId, 
+      taskId, 
+      x: e.clientX, 
+      y: e.clientY 
     });
     setSelected({ wbsId, taskId });
   };
 
   const handleDelete = () => {
-    setWbsList((prev) =>
-      prev.map((wbs) =>
+    setWbsList(prev =>
+      prev.map(wbs =>
         wbs.wbsId === contextMenu.wbsId
-          ? {
-              ...wbs,
-              activities: wbs.activities.filter(
-                (task) => task.id !== contextMenu.taskId
-              ),
-            }
+          ? { ...wbs, activities: wbs.activities.filter(task => task.id !== contextMenu.taskId) }
           : wbs
       )
     );
-    setContextMenu({ ...contextMenu, visible: false });
+    setContextMenu({ visible: false, wbsId: null, taskId: null, x: 0, y: 0 });
     setSelected({ wbsId: null, taskId: null });
   };
 
-  const ganttMinWidth = chartData.timeUnits.length * 64;
+  // Close context menu when clicking elsewhere
+  const handleCloseContextMenu = () => {
+    setContextMenu({ visible: false, wbsId: null, taskId: null, x: 0, y: 0 });
+  };
 
-  // Header columns
-  const headerCols = [
-    { key: "code", label: "Code" },
-    { key: "description", label: "Activity Description" },
-    ...(showManHours
-      ? [
-          { key: "manHours", label: "Man Hours" },
-          { key: "activityWeight", label: "Activity Weight (%)" },
-        ]
-      : []),
-    { key: "startDate", label: "Start Date" },
-    { key: "finishDate", label: "Finish Date" },
-    { key: "progress", label: "Progress (%)" },
-  ];
-
-  // For left positions
+  // Header columns helpers
+  const headerCols = headerColsDef(showManHours);
   const getLeftMap = () => {
-    let map = {};
-    let acc = 0;
+    let map = {}, acc = 0;
     headerCols.forEach((col) => {
       map[col.key] = acc;
       acc += columnWidths[col.key] || 90;
     });
     return map;
   };
-
-  const totalColumnsWidth = headerCols.reduce((sum, col) => sum + (columnWidths[col.key] || 90), 0);
+  const ganttMinWidth = chartData.timeUnits.length * 64;
 
   return (
-    <div className="p-6 w-full min-h-screen">
-      {/* Context Menu */}
-      {contextMenu.visible && (
-        <div
-          ref={contextMenuRef}
-          style={{
-            position: "fixed",
-            top: contextMenu.y,
-            left: contextMenu.x,
-            zIndex: 100,
-            background: "white",
-            border: "1px solid #e5e7eb",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-            borderRadius: 6,
-            minWidth: 140,
-          }}
-        >
-          <button
-            className="w-full px-4 py-2 text-left text-red-600 hover:bg-gray-50"
-            onClick={handleDelete}
-          >
-            Delete Activity
-          </button>
-        </div>
-      )}
-
+    <div className="p-6 w-full min-h-screen" onClick={handleCloseContextMenu}>
       <Card className="mb-6 w-full">
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <span className="inline-block font-semibold text-lg text-green-700">
             Overall Progress: {overallProgress.toFixed(1)}%
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto text-gray-700 flex items-center gap-1"
-            onClick={() => toggleAll(allCollapsed)}
-            title={allCollapsed ? "Expand All" : "Collapse All"}
-          >
+          <Button variant="outline" size="sm" className="ml-auto text-gray-700 flex items-center gap-1" onClick={() => toggleAll(allCollapsed)} title={allCollapsed ? "Expand All" : "Collapse All"}>
             <ChevronsDownUp className="w-4 h-4" />
             {allCollapsed ? "Expand All" : "Collapse All"}
           </Button>
-          {/* Settings Button */}
-          <Popover
-            open={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
-            trigger={
-              <Button
-                variant="ghost"
-                className="ml-2"
-                onClick={() => setSettingsOpen((v) => !v)}
-                aria-label="Settings"
-              >
+          <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" className="ml-2" aria-label="Settings">
                 <Settings2 className="w-5 h-5" />
               </Button>
-            }
-          >
-            {/* Settings content */}
-            <div className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowManHours((v) => !v)}
-              >
-                {showManHours
-                  ? "Hide Man-Hours Loading"
-                  : "Show Man-Hours Loading"}
+            </PopoverTrigger>
+            <PopoverContent className="space-y-3">
+              <Button variant="outline" className="w-full" onClick={() => setShowManHours(v => !v)}>
+                {showManHours ? "Hide Man-Hours Loading" : "Show Man-Hours Loading"}
               </Button>
               <div>
-                <Label className="text-sm font-medium mb-1 block">
-                  View Mode
-                </Label>
+                <Label className="text-sm font-medium mb-1 block">View Mode</Label>
                 <Select value={viewMode} onValueChange={setViewMode}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="day">By Day</SelectItem>
                     <SelectItem value="week">By Week</SelectItem>
@@ -567,11 +350,10 @@ const GanttChart = () => {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+            </PopoverContent>
           </Popover>
         </CardHeader>
         <CardContent>
-          {/* Gantt Chart */}
           <div className="border rounded-lg overflow-auto" style={{ height: "70vh" }}>
             <div className="min-w-max relative">
               {/* Header */}
@@ -580,26 +362,20 @@ const GanttChart = () => {
                   {headerCols.map((col, idx, arr) => (
                     <div
                       key={col.key}
-                      className={`p-2 bg-gray-200 text-center sticky left-0 z-30 relative group`}
+                      className="p-2 bg-gray-200 text-center sticky left-0 z-30 relative group"
                       style={{
                         width: `${columnWidths[col.key] || 90}px`,
                         left: `${arr
                           .slice(0, idx)
-                          .reduce(
-                            (acc, cur) => acc + (columnWidths[cur.key] || 90),
-                            0
-                          )}px`,
+                          .reduce((acc, cur) => acc + (columnWidths[cur.key] || 90), 0)
+                        }px`,
                         fontSize: "0.95rem",
                         borderRight: idx < arr.length - 1 ? "1px solid #e5e7eb" : "",
                       }}
                     >
                       {col.label}
                       {col.key !== "activityWeight" && (
-                        <div
-                          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400"
-                          onMouseDown={(e) => handleMouseDown(e, col.key)}
-                          style={{ zIndex: 35 }}
-                        />
+                        <ColumnResizer onMouseDown={e => handleMouseDown(e, col.key)} />
                       )}
                     </div>
                   ))}
@@ -625,7 +401,6 @@ const GanttChart = () => {
                   </div>
                 </div>
               </div>
-
               {/* WBS Sections */}
               {wbsList.map((wbs, wbsIndex) => {
                 const leftMap = getLeftMap();
@@ -633,7 +408,7 @@ const GanttChart = () => {
                 const summary = wbsSummaries[wbsIndex];
                 return (
                   <React.Fragment key={wbs.wbsId}>
-                    {/* WBS Row - Fixed positioning with proper alignment */}
+                    {/* WBS Row */}
                     <div
                       className="flex items-center sticky left-0 z-15"
                       style={{
@@ -645,13 +420,9 @@ const GanttChart = () => {
                         fontSize: "1rem",
                       }}
                     >
-                      {/* Collapse/Expand Icon */}
                       <button
                         onClick={() =>
-                          setCollapsed((prev) => ({
-                            ...prev,
-                            [wbs.wbsId]: !prev[wbs.wbsId],
-                          }))
+                          setCollapsed(prev => ({ ...prev, [wbs.wbsId]: !prev[wbs.wbsId] }))
                         }
                         className="focus:outline-none ml-2 mr-2"
                         style={{
@@ -672,12 +443,14 @@ const GanttChart = () => {
                           <ChevronDown className="text-white w-5 h-5" />
                         )}
                       </button>
-                      
-                      {/* WBS Name starting from Code column through Description column */}
-                      <div className="text-left text-white font-bold flex items-center" style={{ width: `${columnWidths.code + columnWidths.description - 60}px`, fontSize: "1.05rem", paddingLeft: "8px" }}>
+                      {/* WBS Name */}
+                      <div className="text-left text-white font-bold flex items-center"
+                        style={{
+                          width: `${columnWidths.code + columnWidths.description - 60}px`,
+                          fontSize: "1.05rem",
+                          paddingLeft: "8px"
+                        }}>
                         {wbs.wbsName}
-                        
-                        {/* Add Activity Button positioned near WBS name */}
                         <Button
                           size="sm"
                           variant="ghost"
@@ -694,8 +467,6 @@ const GanttChart = () => {
                           Add Activity
                         </Button>
                       </div>
-                      
-                      {/* WBS Summary Information aligned with respective columns */}
                       {showManHours && (
                         <>
                           <div className="text-center text-white text-xs" style={{ width: `${columnWidths.manHours}px` }}>
@@ -715,72 +486,49 @@ const GanttChart = () => {
                       <div className="text-center text-white text-xs" style={{ width: `${columnWidths.progress}px` }}>
                         {summary.progress.toFixed(1)}%
                       </div>
-
-                      {/* Fill remaining space */}
                       <div className="flex-1" />
                     </div>
-                    
                     {/* Activity Rows */}
                     {!isCollapsed && (
                       wbs.activities.length === 0 ? (
                         <div className="flex text-gray-400 text-xs px-4 py-2 relative">
                           No activities yet.
-                          {/* Full-width activity divider line */}
-                          <div 
-                            className="absolute bottom-0 left-0 h-px bg-blue-400"
-                            style={{ width: "100%" }}
-                          />
+                          <div className="absolute bottom-0 left-0 h-px bg-blue-400" style={{ width: "100%" }} />
                         </div>
                       ) : (
                         wbs.activities.map((task, taskIndex, taskArray) => {
-                          const weight =
-                            totalManHours > 0
-                              ? ((Number(task.manHours) || 0) / totalManHours)
-                              : 0;
+                          const weight = totalManHours > 0
+                            ? ((Number(task.manHours) || 0) / totalManHours)
+                            : 0;
                           return (
                             <div
                               key={task.id}
                               className={`relative cursor-pointer hover:bg-gray-50 select-none ${
-                                selected.wbsId === wbs.wbsId && selected.taskId === task.id
-                                  ? "bg-blue-100"
-                                  : ""
+                                selected.wbsId === wbs.wbsId && selected.taskId === task.id ? "bg-blue-100" : ""
                               }`}
-                              style={{ 
-                                minHeight: 38,
-                                zIndex: 5,
-                                width: "100%"
+                              style={{ minHeight: 38, zIndex: 5, width: "100%" }}
+                              onContextMenu={e => handleRowContextMenu(e, wbs.wbsId, task.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelected({ wbsId: wbs.wbsId, taskId: task.id });
                               }}
-                              onContextMenu={(e) => handleRowContextMenu(e, wbs.wbsId, task.id)}
-                              onClick={() => setSelected({ wbsId: wbs.wbsId, taskId: task.id })}
                             >
                               <div className="flex">
                                 {/* Code */}
                                 <div
                                   className="p-2 flex items-center justify-center bg-white sticky left-0 z-15"
-                                  style={{
-                                    width: `${columnWidths.code}px`,
-                                    minHeight: 38,
-                                    fontSize: "0.92rem",
-                                  }}
+                                  style={{ width: `${columnWidths.code}px`, minHeight: 38, fontSize: "0.92rem" }}
                                 >
-                                  <span className="text-xs font-mono text-gray-600">
-                                    {task.code}
-                                  </span>
+                                  <span className="text-xs font-mono text-gray-600">{task.code}</span>
                                 </div>
                                 {/* Description */}
                                 <div
                                   className="p-2 bg-white sticky z-15"
-                                  style={{
-                                    width: `${columnWidths.description}px`,
-                                    left: `${leftMap.description}px`,
-                                    minHeight: 38,
-                                  }}
+                                  style={{ width: `${columnWidths.description}px`, left: `${leftMap.description}px`, minHeight: 38 }}
                                 >
                                   <Input
                                     value={task.description}
-                                    onChange={(e) =>
-                                      updateTask(wbs.wbsId, task.id, "description", e.target.value)
-                                    }
+                                    onChange={e => updateTask(wbs.wbsId, task.id, "description", e.target.value)}
                                     placeholder="Enter activity description..."
                                     className="border-0 shadow-none focus:ring-1 focus:ring-blue-300 h-8 text-xs"
                                   />
@@ -788,102 +536,56 @@ const GanttChart = () => {
                                 {/* Man Hours and Weight (if shown) */}
                                 {showManHours && (
                                   <>
-                                    <div
-                                      className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                      style={{
-                                        width: `${columnWidths.manHours}px`,
-                                        left: `${leftMap.manHours}px`,
-                                        minHeight: 38,
-                                      }}
-                                    >
+                                    <div className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                      style={{ width: `${columnWidths.manHours}px`, left: `${leftMap.manHours}px`, minHeight: 38 }}>
                                       <NumericInput
                                         value={task.manHours ?? 0}
                                         min={0}
-                                        onChange={(e) =>
-                                          updateTask(wbs.wbsId, task.id, "manHours", e.target.value)
-                                        }
+                                        onChange={e => updateTask(wbs.wbsId, task.id, "manHours", e.target.value)}
                                       />
                                     </div>
-                                    <div
-                                      className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                      style={{
-                                        width: `${columnWidths.activityWeight}px`,
-                                        left: `${leftMap.activityWeight}px`,
-                                        minHeight: 38,
-                                      }}
-                                    >
-                                      <span className="text-xs font-mono text-green-700">
-                                        {(weight * 100).toFixed(1)}%
-                                      </span>
+                                    <div className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                      style={{ width: `${columnWidths.activityWeight}px`, left: `${leftMap.activityWeight}px`, minHeight: 38 }}>
+                                      <span className="text-xs font-mono text-green-700">{(weight * 100).toFixed(1)}%</span>
                                     </div>
                                   </>
                                 )}
                                 {/* Start Date */}
-                                <div
-                                  className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                  style={{
-                                    width: `${columnWidths.startDate}px`,
-                                    left: `${leftMap.startDate}px`,
-                                    minHeight: 38,
-                                  }}
-                                >
+                                <div className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                  style={{ width: `${columnWidths.startDate}px`, left: `${leftMap.startDate}px`, minHeight: 38 }}>
                                   <div className="w-full">
                                     <DatePicker
                                       value={task.startDate}
-                                      onChange={(date) =>
-                                        date &&
-                                        updateTask(wbs.wbsId, task.id, "startDate", date)
-                                      }
+                                      onChange={date => date && updateTask(wbs.wbsId, task.id, "startDate", date)}
                                       className="border-0 shadow-none focus:border focus:border-blue-300"
                                     />
                                   </div>
                                 </div>
                                 {/* Finish Date */}
-                                <div
-                                  className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                  style={{
-                                    width: `${columnWidths.finishDate}px`,
-                                    left: `${leftMap.finishDate}px`,
-                                    minHeight: 38,
-                                  }}
-                                >
+                                <div className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                  style={{ width: `${columnWidths.finishDate}px`, left: `${leftMap.finishDate}px`, minHeight: 38 }}>
                                   <div className="w-full">
                                     <DatePicker
                                       value={task.finishDate}
-                                      onChange={(date) =>
-                                        date &&
-                                        updateTask(wbs.wbsId, task.id, "finishDate", date)
-                                      }
+                                      onChange={date => date && updateTask(wbs.wbsId, task.id, "finishDate", date)}
                                       className="border-0 shadow-none focus:border focus:border-blue-300"
                                     />
                                   </div>
                                 </div>
                                 {/* Progress */}
-                                <div
-                                  className="p-2 bg-white sticky z-15 flex items-center justify-center"
-                                  style={{
-                                    width: `${columnWidths.progress}px`,
-                                    left: `${leftMap.progress}px`,
-                                    minHeight: 38,
-                                  }}
-                                >
+                                <div className="p-2 bg-white sticky z-15 flex items-center justify-center"
+                                  style={{ width: `${columnWidths.progress}px`, left: `${leftMap.progress}px`, minHeight: 38 }}>
                                   <NumericInput
                                     value={task.progress ?? 0}
                                     min={0}
                                     max={100}
-                                    onChange={(e) =>
-                                      updateTask(wbs.wbsId, task.id, "progress", e.target.value)
-                                    }
+                                    onChange={e => updateTask(wbs.wbsId, task.id, "progress", e.target.value)}
                                   />
                                 </div>
                                 {/* Gantt Timeline */}
                                 <div
                                   className="relative p-2 flex items-center"
-                                  style={{
-                                    minWidth: ganttMinWidth,
-                                    minHeight: 38,
-                                    background: "white",
-                                  }}
+                                  style={{ minWidth: ganttMinWidth, minHeight: 38, background: "white" }}
                                 >
                                   <div className="relative w-full h-8">
                                     {shouldShowBar(task) && (
@@ -894,34 +596,21 @@ const GanttChart = () => {
                                         <div
                                           className="h-6 bg-green-500 rounded-none shadow-sm transition-all duration-300"
                                           style={{
-                                            width: `${Math.max(
-                                              0,
-                                              Math.min(100, Number(task.progress) || 0)
-                                            )}%`,
+                                            width: `${Math.max(0, Math.min(100, Number(task.progress) || 0))}%`,
                                             minWidth: "0px",
                                             maxWidth: "100%",
                                             opacity: task.progress > 0 ? 1 : 0.15,
                                             borderRadius: 0,
                                           }}
-                                          title={`${task.code}: ${task.description} (${format(
-                                            task.startDate,
-                                            "MMM dd"
-                                          )} - ${format(task.finishDate, "MMM dd")})`}
+                                          title={`${task.code}: ${task.description} (${format(task.startDate, "MMM dd")} - ${format(task.finishDate, "MMM dd")})`}
                                         />
                                       </div>
                                     )}
                                   </div>
                                 </div>
                               </div>
-                              
-                              {/* Blue horizontal line spanning complete row width */}
-                              <div 
-                                className="absolute bottom-0 left-0 h-px bg-blue-400"
-                                style={{ 
-                                  width: "100%",
-                                  zIndex: 1
-                                }}
-                              />
+                              {/* Blue horizontal line */}
+                              <div className="absolute bottom-0 left-0 h-px bg-blue-400" style={{ width: "100%", zIndex: 1 }} />
                             </div>
                           );
                         })
@@ -939,6 +628,18 @@ const GanttChart = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Context Menu - Fixed positioning */}
+      <ContextMenuPopover
+        open={contextMenu.visible}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseContextMenu();
+          }
+        }}
+        onDelete={handleDelete}
+        anchorRef={contextMenuAnchorRef}
+      />
     </div>
   );
 };
