@@ -113,7 +113,7 @@ const GanttChart = () => {
   const [contextMenu, setContextMenu] = useState({ visible: false, wbsId: null, taskId: null });
   const [collapsed, setCollapsed] = useState({});
   const [columnWidths, setColumnWidths] = useState({
-    code: 80, description: 280, projectName: 200, manHours: 90, activityWeight: 110, 
+    code: 80, description: 280, manHours: 90, activityWeight: 110, 
     startDate: 120, finishDate: 120, progress: 90,
   });
   const [isResizing, setIsResizing] = useState(null);
@@ -239,13 +239,12 @@ const GanttChart = () => {
   const headerCols = [
     { key: "code", label: "Code" },
     { key: "description", label: "Activity Description" },
-    { key: "projectName", label: "Project Name" },
     ...(showManHours ? [
-      { key: "manHours", label: "Man Hours" },
-      { key: "activityWeight", label: "Activity Weight (%)" },
+      { key: "manHours", label: "Hours" },
+      { key: "activityWeight", label: "Weight (%)" },
       { key: "startDate", label: "Start Date" },
       { key: "finishDate", label: "Finish Date" },
-      { key: "progress", label: "Progress (%)" },
+      { key: "progress", label: "Progress" },
     ] : []),
   ];
 
@@ -402,29 +401,44 @@ const GanttChart = () => {
               </div>
 
               {/* Project Header Row */}
-              <div className="relative">
-                <div className="flex items-center sticky left-0 z-20 mt-1" 
-                     style={{ background: "linear-gradient(90deg, #2563eb, #3b82f6 80%)", minHeight: 50, borderRadius: "8px" }}>
+              <div className="relative mt-1">
+                <div className="flex items-center sticky left-0 z-20" style={{ minHeight: 50 }}>
                   
-                  <div className="text-white font-bold flex items-center" style={{ width: `${columnWidths.code + columnWidths.description + columnWidths.projectName - 20}px`, paddingLeft: "20px" }}>
-                    {projectData.projectName}
+                  {/* Project columns with colored background */}
+                  <div className="flex items-center" style={{ background: "linear-gradient(90deg, #1e40af, #2563eb 80%)", borderRadius: "8px 0 0 8px" }}>
+                    <div className="text-white font-bold flex items-center" style={{ width: `${columnWidths.code + columnWidths.description - 20}px`, paddingLeft: "20px", minHeight: 50 }}>
+                      {projectData.projectName}
+                    </div>
+                    
+                    {showManHours && (
+                      <>
+                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.manHours}px`, minHeight: 50 }}>{projectSummary.totalManHours}</div>
+                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.activityWeight}px`, minHeight: 50 }}>{projectSummary.totalWeight.toFixed(1)}%</div>
+                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.startDate}px`, minHeight: 50 }}>
+                          {projectSummary.earliestStart ? format(projectSummary.earliestStart, "MMM dd") : "-"}
+                        </div>
+                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.finishDate}px`, minHeight: 50 }}>
+                          {projectSummary.latestFinish ? format(projectSummary.latestFinish, "MMM dd") : "-"}
+                        </div>
+                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.progress}px`, minHeight: 50 }}>
+                          {projectSummary.progress.toFixed(1)}%
+                        </div>
+                      </>
+                    )}
                   </div>
                   
-                  {showManHours && (
-                    <>
-                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.manHours}px` }}>{projectSummary.totalManHours}</div>
-                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.activityWeight}px` }}>{projectSummary.totalWeight.toFixed(1)}%</div>
-                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.startDate}px` }}>
-                        {projectSummary.earliestStart ? format(projectSummary.earliestStart, "MMM dd") : "-"}
-                      </div>
-                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.finishDate}px` }}>
-                        {projectSummary.latestFinish ? format(projectSummary.latestFinish, "MMM dd") : "-"}
-                      </div>
-                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.progress}px` }}>
-                        {projectSummary.progress.toFixed(1)}%
-                      </div>
-                    </>
-                  )}
+                  {/* Project Gantt Timeline - White background */}
+                  <div className="relative p-2 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 50 }}>
+                    <div className="relative w-full h-8">
+                      {projectSummary.earliestStart && projectSummary.latestFinish && (
+                        <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition({ startDate: projectSummary.earliestStart, finishDate: projectSummary.latestFinish })}>
+                          <div className="h-6 bg-blue-700 transition-all duration-300" 
+                               style={{ width: `${Math.max(0, Math.min(100, projectSummary.progress))}%`, opacity: projectSummary.progress > 0 ? 1 : 0.15 }}
+                               title={`${projectData.projectName}: ${projectSummary.progress.toFixed(1)}%`} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -436,33 +450,53 @@ const GanttChart = () => {
                 return (
                   <div key={wbs.wbsId} className="relative">
                     {/* WBS Header Row */}
-                    <div className="flex items-center sticky left-0 z-20 mt-1" 
-                         style={{ background: `linear-gradient(90deg, ${wbs.color}, #4d9dff 80%)`, minHeight: 50, borderRadius: "8px 8px 0 0" }}>
-                      <button onClick={() => toggleCollapse(wbs.wbsId)} className="ml-2 mr-2 p-1 hover:bg-white/20 rounded">
-                        {isCollapsed ? <ChevronRight className="text-white w-5 h-5" /> : <ChevronDown className="text-white w-5 h-5" />}
-                      </button>
+                    <div className="flex items-center sticky left-0 z-20 mt-1" style={{ minHeight: 50 }}>
                       
-                      <div className="text-white font-bold flex items-center" style={{ width: `${columnWidths.code + columnWidths.description + columnWidths.projectName - 60}px`, paddingLeft: "8px" }}>
-                        {wbs.wbsName}
-                        <Button size="sm" variant="ghost" className="ml-4 text-white border border-white/40 hover:bg-white/20" onClick={() => addNewTask(wbs.wbsId)}>
-                          <Plus className="w-4 h-4 mr-1" />Add Activity
-                        </Button>
+                      {/* WBS columns with colored background */}
+                      <div className="flex items-center" style={{ background: `linear-gradient(90deg, ${wbs.color}, #4d9dff 80%)`, borderRadius: "8px 0 0 0" }}>
+                        <button onClick={() => toggleCollapse(wbs.wbsId)} className="ml-2 mr-2 p-1 hover:bg-white/20 rounded">
+                          {isCollapsed ? <ChevronRight className="text-white w-5 h-5" /> : <ChevronDown className="text-white w-5 h-5" />}
+                        </button>
+                        
+                        <div className="text-white font-bold flex items-center" style={{ width: `${columnWidths.code + columnWidths.description - 60}px`, paddingLeft: "8px", minHeight: 50 }}>
+                          {wbs.wbsName}
+                          <Button size="sm" variant="ghost" className="ml-4 text-white border border-white/40 hover:bg-white/20" onClick={() => addNewTask(wbs.wbsId)}>
+                            <Plus className="w-4 h-4 mr-1" />Add Activity
+                          </Button>
+                        </div>
+                        
+                        {showManHours && (
+                          <>
+                            <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.manHours}px`, minHeight: 50 }}>{summary.totalManHours}</div>
+                            <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.activityWeight}px`, minHeight: 50 }}>{summary.totalWeight.toFixed(1)}%</div>
+                          </>
+                        )}
+                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.startDate}px`, minHeight: 50 }}>
+                          {summary.earliestStart ? format(summary.earliestStart, "MMM dd") : "-"}
+                        </div>
+                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.finishDate}px`, minHeight: 50 }}>
+                          {summary.latestFinish ? format(summary.latestFinish, "MMM dd") : "-"}
+                        </div>
+                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.progress}px`, minHeight: 50 }}>
+                          {summary.progress.toFixed(1)}%
+                        </div>
                       </div>
                       
-                      {showManHours && (
-                        <>
-                          <div className="text-center text-white text-xs" style={{ width: `${columnWidths.manHours}px` }}>{summary.totalManHours}</div>
-                          <div className="text-center text-white text-xs" style={{ width: `${columnWidths.activityWeight}px` }}>{summary.totalWeight.toFixed(1)}%</div>
-                        </>
-                      )}
-                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.startDate}px` }}>
-                        {summary.earliestStart ? format(summary.earliestStart, "MMM dd") : "-"}
-                      </div>
-                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.finishDate}px` }}>
-                        {summary.latestFinish ? format(summary.latestFinish, "MMM dd") : "-"}
-                      </div>
-                      <div className="text-center text-white text-xs" style={{ width: `${columnWidths.progress}px` }}>
-                        {summary.progress.toFixed(1)}%
+                      {/* WBS Gantt Timeline - White background */}
+                      <div className="relative p-2 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 50 }}>
+                        <div className="relative w-full h-8">
+                          {summary.earliestStart && summary.latestFinish && (
+                            <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition({ startDate: summary.earliestStart, finishDate: summary.latestFinish })}>
+                              <div className="h-6 transition-all duration-300" 
+                                   style={{ 
+                                     width: `${Math.max(0, Math.min(100, summary.progress))}%`, 
+                                     background: wbs.color,
+                                     opacity: summary.progress > 0 ? 1 : 0.15 
+                                   }}
+                                   title={`${wbs.wbsName}: ${summary.progress.toFixed(1)}%`} />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -487,7 +521,6 @@ const GanttChart = () => {
                                   <Input value={task.description} onChange={e => updateTask(wbs.wbsId, task.id, "description", e.target.value)} 
                                          placeholder="Enter activity description..." className="border-0 shadow-none h-8 text-xs" />
                                 )}
-                                {col.key === "projectName" && <span className="text-xs text-gray-500">{projectData.projectName}</span>}
                                 {col.key === "manHours" && (
                                   <NumericInput value={task.manHours} onChange={e => updateTask(wbs.wbsId, task.id, "manHours", e.target.value)} />
                                 )}
@@ -515,8 +548,8 @@ const GanttChart = () => {
                             </div>
                           </div>
                           
-                          {/* Row bottom border - PROPERLY POSITIONED */}
-                          <div className="absolute bottom-0 left-0 w-full h-px bg-blue-200" />
+                          {/* Row bottom border - SPANS ENTIRE ROW INCLUDING GANTT */}
+                          <div className="absolute bottom-0 left-0 h-px bg-blue-200" style={{ width: `${headerCols.reduce((acc, col) => acc + columnWidths[col.key], 0) + ganttMinWidth}px` }} />
                         </div>
                       );
                     })}
