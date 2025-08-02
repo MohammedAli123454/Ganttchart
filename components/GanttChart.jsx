@@ -50,12 +50,12 @@ const format = (date, formatStr) => {
 const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const endOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
-// Initial data with Project structure
+// Initial data with Project structure and hierarchical WBS
 const initialProject = {
   projectName: "Sample Construction Project",
   wbs: [
     {
-      wbsId: "wbs1", wbsName: "Engineering", color: "#388bff",
+      wbsId: "wbs1", wbsName: "Engineering", color: "#388bff", level: 0,
       activities: [
         { id: "1", code: "ENG-001", description: "Basic Design", manHours: 30, 
           startDate: new Date(2025, 5, 20), finishDate: new Date(2025, 5, 30), progress: 60 },
@@ -64,7 +64,7 @@ const initialProject = {
       ],
     },
     {
-      wbsId: "wbs2", wbsName: "Procurement", color: "#1e90ff",
+      wbsId: "wbs2", wbsName: "Procurement", color: "#1e90ff", level: 0,
       activities: [
         { id: "3", code: "PRC-001", description: "Vendor Selection", manHours: 20, 
           startDate: new Date(2025, 6, 1), finishDate: new Date(2025, 6, 10), progress: 70 },
@@ -73,12 +73,48 @@ const initialProject = {
       ],
     },
     {
-      wbsId: "wbs3", wbsName: "Construction", color: "#2778f0",
+      wbsId: "wbs3", wbsName: "Construction", color: "#2778f0", level: 0,
       activities: [
         { id: "5", code: "CON-001", description: "Site Mobilization", manHours: 50, 
           startDate: new Date(2025, 6, 15), finishDate: new Date(2025, 6, 25), progress: 10 },
-        { id: "6", code: "CON-002", description: "Civil Works", manHours: 40, 
-          startDate: new Date(2025, 6, 18), finishDate: new Date(2025, 7, 1), progress: 5 },
+      ],
+      children: [
+        {
+          wbsId: "wbs3-1", wbsName: "Civil Work", color: "#5b9bd5", level: 1, parentId: "wbs3",
+          activities: [
+            { id: "6", code: "CIV-001", description: "Excavation Work", manHours: 40, 
+              startDate: new Date(2025, 6, 18), finishDate: new Date(2025, 7, 1), progress: 5 },
+            { id: "7", code: "CIV-002", description: "Foundation Work", manHours: 35, 
+              startDate: new Date(2025, 7, 2), finishDate: new Date(2025, 7, 15), progress: 0 },
+          ],
+        },
+        {
+          wbsId: "wbs3-2", wbsName: "Piping Work", color: "#5b9bd5", level: 1, parentId: "wbs3",
+          activities: [
+            { id: "8", code: "PIP-001", description: "Pipe Installation", manHours: 45, 
+              startDate: new Date(2025, 7, 5), finishDate: new Date(2025, 7, 20), progress: 0 },
+            { id: "9", code: "PIP-002", description: "Pipe Testing", manHours: 20, 
+              startDate: new Date(2025, 7, 21), finishDate: new Date(2025, 7, 25), progress: 0 },
+          ],
+        },
+        {
+          wbsId: "wbs3-3", wbsName: "Mechanical Work", color: "#5b9bd5", level: 1, parentId: "wbs3",
+          activities: [
+            { id: "10", code: "MEC-001", description: "Equipment Installation", manHours: 60, 
+              startDate: new Date(2025, 7, 10), finishDate: new Date(2025, 7, 30), progress: 0 },
+            { id: "11", code: "MEC-002", description: "Equipment Testing", manHours: 25, 
+              startDate: new Date(2025, 8, 1), finishDate: new Date(2025, 8, 10), progress: 0 },
+          ],
+        },
+        {
+          wbsId: "wbs3-4", wbsName: "E&I Work", color: "#5b9bd5", level: 1, parentId: "wbs3",
+          activities: [
+            { id: "12", code: "EI-001", description: "Electrical Installation", manHours: 55, 
+              startDate: new Date(2025, 7, 15), finishDate: new Date(2025, 8, 5), progress: 0 },
+            { id: "13", code: "EI-002", description: "Instrumentation Setup", manHours: 30, 
+              startDate: new Date(2025, 8, 6), finishDate: new Date(2025, 8, 20), progress: 0 },
+          ],
+        },
       ],
     },
   ]
@@ -151,9 +187,21 @@ const GanttChart = () => {
     };
   }, [isResizing, startX, startWidth]);
 
+  // Flatten all WBS including children for calculations
+  const flattenedWbs = useMemo(() => {
+    const flattened = [];
+    wbsList.forEach(wbs => {
+      flattened.push(wbs);
+      if (wbs.children) {
+        flattened.push(...wbs.children);
+      }
+    });
+    return flattened;
+  }, [wbsList]);
+
   // Calculations
   const allActivities = useMemo(() => 
-    wbsList.flatMap(wbs => wbs.activities.map(act => ({ ...act, wbsId: wbs.wbsId }))), [wbsList]);
+    flattenedWbs.flatMap(wbs => wbs.activities.map(act => ({ ...act, wbsId: wbs.wbsId }))), [flattenedWbs]);
   
   const totalManHours = useMemo(() => 
     allActivities.reduce((sum, t) => sum + (Number(t.manHours) || 0), 0), [allActivities]);
@@ -192,22 +240,29 @@ const GanttChart = () => {
     return { startDate, endDate, timeUnits };
   }, [allActivities, viewMode]);
 
-  // WBS summaries with proportional calculations
+  // WBS summaries with proportional calculations for all WBS levels
   const wbsSummaries = useMemo(() => {
-    return wbsList.map(wbs => {
-      const activities = wbs.activities;
-      if (activities.length === 0) return { totalManHours: 0, totalWeight: 0, earliestStart: null, latestFinish: null, progress: 0 };
+    return flattenedWbs.map(wbs => {
+      // For parent WBS, include children's activities in calculations
+      let allWbsActivities = [...wbs.activities];
+      if (wbs.children) {
+        wbs.children.forEach(child => {
+          allWbsActivities.push(...child.activities);
+        });
+      }
       
-      const totalWbsManHours = activities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
+      if (allWbsActivities.length === 0) return { totalManHours: 0, totalWeight: 0, earliestStart: null, latestFinish: null, progress: 0 };
+      
+      const totalWbsManHours = allWbsActivities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
       // WBS weight is proportional to total project hours
       const totalWeight = totalManHours > 0 ? (totalWbsManHours / totalManHours) * 100 : 0;
-      const validDates = activities.filter(act => act.startDate && act.finishDate);
+      const validDates = allWbsActivities.filter(act => act.startDate && act.finishDate);
       const earliestStart = validDates.length > 0 ? new Date(Math.min(...validDates.map(act => act.startDate))) : null;
       const latestFinish = validDates.length > 0 ? new Date(Math.max(...validDates.map(act => act.finishDate))) : null;
       
-      // WBS progress is weighted average of all activities within this WBS
+      // WBS progress is weighted average of all activities within this WBS (including children)
       const progress = totalWbsManHours > 0 
-        ? activities.reduce((sum, act) => {
+        ? allWbsActivities.reduce((sum, act) => {
             const activityWeight = (Number(act.manHours) || 0) / totalWbsManHours;
             return sum + activityWeight * (Number(act.progress) || 0);
           }, 0) 
@@ -215,7 +270,7 @@ const GanttChart = () => {
       
       return { totalManHours: totalWbsManHours, totalWeight, earliestStart, latestFinish, progress };
     });
-  }, [wbsList, totalManHours]);
+  }, [flattenedWbs, totalManHours]);
   
   // Project summary calculations
   const projectSummary = useMemo(() => {
@@ -224,16 +279,21 @@ const GanttChart = () => {
     const earliestStart = validDates.length > 0 ? new Date(Math.min(...validDates.map(act => act.startDate))) : null;
     const latestFinish = validDates.length > 0 ? new Date(Math.max(...validDates.map(act => act.finishDate))) : null;
     
-    // Project progress is weighted average of all WBS based on their man-hours
+    // Project progress is weighted average of top-level WBS only (level 0)
+    const topLevelWbs = wbsList.filter(wbs => wbs.level === 0);
     const projectProgress = totalProjectManHours > 0 
-      ? wbsList.reduce((sum, wbs, index) => {
-          const wbsWeight = wbsSummaries[index].totalManHours / totalProjectManHours;
-          return sum + wbsWeight * wbsSummaries[index].progress;
+      ? topLevelWbs.reduce((sum, wbs) => {
+          const wbsIndex = flattenedWbs.findIndex(w => w.wbsId === wbs.wbsId);
+          if (wbsIndex >= 0) {
+            const wbsWeight = wbsSummaries[wbsIndex].totalManHours / totalProjectManHours;
+            return sum + wbsWeight * wbsSummaries[wbsIndex].progress;
+          }
+          return sum;
         }, 0)
       : 0;
     
     return { totalManHours: totalProjectManHours, totalWeight: 100, earliestStart, latestFinish, progress: projectProgress };
-  }, [allActivities, wbsList, wbsSummaries]);
+  }, [allActivities, wbsList, flattenedWbs, wbsSummaries]);
 
   // Helper functions
   const headerCols = [
@@ -332,6 +392,136 @@ const GanttChart = () => {
 
   const allCollapsed = Object.values(collapsed).every(Boolean);
   const ganttMinWidth = chartData.timeUnits.length * 64;
+
+  // Helper function to render WBS row with proper indentation and colors
+  const renderWbsRow = (wbs, wbsIndex) => {
+    const isCollapsed = collapsed[wbs.wbsId];
+    const summary = wbsSummaries[wbsIndex];
+    const indentation = wbs.level * 30; // 30px indentation per level
+    
+    return (
+      <div key={wbs.wbsId} className="relative">
+        {/* WBS Header Row */}
+        <div className="flex items-center sticky left-0 z-20 border-t border-transparent" style={{ minHeight: 38 }}>
+          
+          {/* WBS columns with colored background */}
+          <div className="flex items-center sticky left-0 z-15" style={{ 
+            background: `linear-gradient(90deg, ${wbs.color}, #4d9dff 80%)`, 
+            borderRadius: wbs.level === 0 ? "6px 0 0 0" : "4px 0 0 0"
+          }}>
+            <button onClick={() => toggleCollapse(wbs.wbsId)} className="p-1 hover:bg-white/20 rounded" style={{ marginLeft: `${indentation + 8}px`, marginRight: "4px" }}>
+              {isCollapsed ? <ChevronRight className="text-white w-4 h-4" /> : <ChevronDown className="text-white w-4 h-4" />}
+            </button>
+            
+            <div className="text-white font-bold flex items-center" style={{ 
+              width: `${columnWidths.code + columnWidths.description - 50}px`, 
+              paddingLeft: "6px", 
+              minHeight: 38, 
+              fontSize: wbs.level === 0 ? "0.8rem" : "0.75rem" 
+            }}>
+              {wbs.wbsName}
+              <Button size="sm" variant="ghost" className="ml-3 text-white border border-white/40 hover:bg-white/20 text-xs" onClick={() => addNewTask(wbs.wbsId)}>
+                <Plus className="w-3 h-3 mr-1" />Add
+              </Button>
+            </div>
+            
+            {showManHours && (
+              <>
+                <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.manHours}px`, minHeight: 38 }}>{summary.totalManHours}</div>
+                <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.activityWeight}px`, minHeight: 38 }}>{summary.totalWeight.toFixed(1)}%</div>
+              </>
+            )}
+            <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.startDate}px`, minHeight: 38 }}>
+              {summary.earliestStart ? format(summary.earliestStart, "MMM dd") : "-"}
+            </div>
+            <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.finishDate}px`, minHeight: 38 }}>
+              {summary.latestFinish ? format(summary.latestFinish, "MMM dd") : "-"}
+            </div>
+            <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.progress}px`, minHeight: 38 }}>
+              {summary.progress.toFixed(1)}%
+            </div>
+          </div>
+          
+          {/* WBS Gantt Timeline - White background */}
+          <div className="relative p-2 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 38 }}>
+            <div className="relative w-full h-8">
+              {summary.earliestStart && summary.latestFinish && (
+                <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition({ startDate: summary.earliestStart, finishDate: summary.latestFinish })}>
+                  <div className="h-6 transition-all duration-300" 
+                       style={{ 
+                         width: `${Math.max(0, Math.min(100, summary.progress))}%`, 
+                         background: wbs.color,
+                         opacity: summary.progress > 0 ? 1 : 0.15 
+                       }}
+                       title={`${wbs.wbsName}: ${summary.progress.toFixed(1)}%`} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Blue line after WBS row */}
+        <div className="h-px bg-blue-300" style={{ width: `${headerCols.reduce((acc, col) => acc + columnWidths[col.key], 0) + ganttMinWidth}px` }} />
+
+        {/* Activity Rows */}
+        {!isCollapsed && wbs.activities.map(task => {
+          const wbsManHours = wbs.activities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
+          const weight = wbsManHours > 0 ? ((Number(task.manHours) || 0) / wbsManHours) * 100 : 0;
+          const isSelected = selected.wbsId === wbs.wbsId && selected.taskId === task.id;
+          
+          return (
+            <div key={task.id} className={`relative hover:bg-gray-50 ${isSelected ? "bg-blue-100" : ""} border-b border-blue-300`} 
+                 style={{ minHeight: 32 }}
+                 onContextMenu={e => handleRowContextMenu(e, wbs.wbsId, task.id)}
+                 onClick={e => { e.stopPropagation(); setSelected({ wbsId: wbs.wbsId, taskId: task.id }); }}>
+              
+              <div className="flex">
+                {headerCols.map((col, idx) => (
+                  <div key={col.key} className="px-2 py-1 bg-white sticky z-15" 
+                       style={{ width: `${columnWidths[col.key]}px`, left: `${getLeftPosition(idx)}px`, minHeight: 32 }}>
+                    {col.key === "code" && <span className="text-xs font-mono text-gray-600 flex items-center h-full">{task.code}</span>}
+                    {col.key === "description" && (
+                      <Input value={task.description} onChange={e => updateTask(wbs.wbsId, task.id, "description", e.target.value)} 
+                             placeholder="Enter activity description..." className="border-0 shadow-none h-6 text-xs" />
+                    )}
+                    {col.key === "manHours" && (
+                      <NumericInput value={task.manHours} onChange={e => updateTask(wbs.wbsId, task.id, "manHours", e.target.value)} />
+                    )}
+                    {col.key === "activityWeight" && <span className="text-xs text-green-700 flex items-center justify-center h-full">{weight.toFixed(1)}%</span>}
+                    {(col.key === "startDate" || col.key === "finishDate") && (
+                      <DatePicker value={task[col.key]} onChange={date => updateTask(wbs.wbsId, task.id, col.key, date)} />
+                    )}
+                    {col.key === "progress" && (
+                      <NumericInput value={task.progress} min={0} max={100} onChange={e => updateTask(wbs.wbsId, task.id, "progress", e.target.value)} />
+                    )}
+                  </div>
+                ))}
+                
+                {/* Gantt Timeline */}
+                <div className="relative px-2 py-1 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 32 }}>
+                  <div className="relative w-full h-8">
+                    {task.description.trim() && task.startDate && task.finishDate && (
+                      <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition(task)}>
+                        <div className="h-6 bg-green-500 transition-all duration-300" 
+                             style={{ width: `${Math.max(0, Math.min(100, task.progress))}%`, opacity: task.progress > 0 ? 1 : 0.15 }}
+                             title={`${task.code}: ${task.description}`} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        
+        {/* Render child WBS if not collapsed */}
+        {!isCollapsed && wbs.children && wbs.children.map(childWbs => {
+          const childIndex = flattenedWbs.findIndex(w => w.wbsId === childWbs.wbsId);
+          return renderWbsRow(childWbs, childIndex);
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="p-6 w-full min-h-screen" onClick={() => setContextMenu({ visible: false, wbsId: null, taskId: null })}>
@@ -448,119 +638,10 @@ const GanttChart = () => {
                 <div className="h-px bg-blue-300" style={{ width: `${headerCols.reduce((acc, col) => acc + columnWidths[col.key], 0) + ganttMinWidth}px` }} />
               </div>
 
-              {/* WBS Content */}
-              {wbsList.map((wbs, wbsIndex) => {
-                const isCollapsed = collapsed[wbs.wbsId];
-                const summary = wbsSummaries[wbsIndex];
-                
-                return (
-                  <div key={wbs.wbsId} className="relative">
-                    {/* WBS Header Row */}
-                    <div className="flex items-center sticky left-0 z-20 border-t border-transparent" style={{ minHeight: 38 }}>
-                      
-                      {/* WBS columns with colored background */}
-                      <div className="flex items-center sticky left-0 z-15" style={{ background: `linear-gradient(90deg, ${wbs.color}, #4d9dff 80%)`, borderRadius: "6px 0 0 0" }}>
-                        <button onClick={() => toggleCollapse(wbs.wbsId)} className="ml-2 mr-1 p-1 hover:bg-white/20 rounded">
-                          {isCollapsed ? <ChevronRight className="text-white w-4 h-4" /> : <ChevronDown className="text-white w-4 h-4" />}
-                        </button>
-                        
-                        <div className="text-white font-bold flex items-center" style={{ width: `${columnWidths.code + columnWidths.description - 50}px`, paddingLeft: "6px", minHeight: 38, fontSize: "0.8rem" }}>
-                          {wbs.wbsName}
-                          <Button size="sm" variant="ghost" className="ml-3 text-white border border-white/40 hover:bg-white/20 text-xs" onClick={() => addNewTask(wbs.wbsId)}>
-                            <Plus className="w-3 h-3 mr-1" />Add
-                          </Button>
-                        </div>
-                        
-                        {showManHours && (
-                          <>
-                            <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.manHours}px`, minHeight: 38 }}>{summary.totalManHours}</div>
-                            <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.activityWeight}px`, minHeight: 38 }}>{summary.totalWeight.toFixed(1)}%</div>
-                          </>
-                        )}
-                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.startDate}px`, minHeight: 38 }}>
-                          {summary.earliestStart ? format(summary.earliestStart, "MMM dd") : "-"}
-                        </div>
-                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.finishDate}px`, minHeight: 38 }}>
-                          {summary.latestFinish ? format(summary.latestFinish, "MMM dd") : "-"}
-                        </div>
-                        <div className="text-center text-white text-xs flex items-center justify-center" style={{ width: `${columnWidths.progress}px`, minHeight: 38 }}>
-                          {summary.progress.toFixed(1)}%
-                        </div>
-                      </div>
-                      
-                      {/* WBS Gantt Timeline - White background */}
-                      <div className="relative p-2 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 38 }}>
-                        <div className="relative w-full h-8">
-                          {summary.earliestStart && summary.latestFinish && (
-                            <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition({ startDate: summary.earliestStart, finishDate: summary.latestFinish })}>
-                              <div className="h-6 transition-all duration-300" 
-                                   style={{ 
-                                     width: `${Math.max(0, Math.min(100, summary.progress))}%`, 
-                                     background: wbs.color,
-                                     opacity: summary.progress > 0 ? 1 : 0.15 
-                                   }}
-                                   title={`${wbs.wbsName}: ${summary.progress.toFixed(1)}%`} />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Blue line after WBS row */}
-                    <div className="h-px bg-blue-300" style={{ width: `${headerCols.reduce((acc, col) => acc + columnWidths[col.key], 0) + ganttMinWidth}px` }} />
-
-                    {/* Activity Rows */}
-                    {!isCollapsed && wbs.activities.map(task => {
-                      const wbsManHours = wbs.activities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
-                      const weight = wbsManHours > 0 ? ((Number(task.manHours) || 0) / wbsManHours) * 100 : 0;
-                      const isSelected = selected.wbsId === wbs.wbsId && selected.taskId === task.id;
-                      
-                      return (
-                        <div key={task.id} className={`relative hover:bg-gray-50 ${isSelected ? "bg-blue-100" : ""} border-b border-blue-300`} 
-                             style={{ minHeight: 32 }}
-                             onContextMenu={e => handleRowContextMenu(e, wbs.wbsId, task.id)}
-                             onClick={e => { e.stopPropagation(); setSelected({ wbsId: wbs.wbsId, taskId: task.id }); }}>
-                          
-                          <div className="flex">
-                            {headerCols.map((col, idx) => (
-                              <div key={col.key} className="px-2 py-1 bg-white sticky z-15" 
-                                   style={{ width: `${columnWidths[col.key]}px`, left: `${getLeftPosition(idx)}px`, minHeight: 32 }}>
-                                {col.key === "code" && <span className="text-xs font-mono text-gray-600 flex items-center h-full">{task.code}</span>}
-                                {col.key === "description" && (
-                                  <Input value={task.description} onChange={e => updateTask(wbs.wbsId, task.id, "description", e.target.value)} 
-                                         placeholder="Enter activity description..." className="border-0 shadow-none h-6 text-xs" />
-                                )}
-                                {col.key === "manHours" && (
-                                  <NumericInput value={task.manHours} onChange={e => updateTask(wbs.wbsId, task.id, "manHours", e.target.value)} />
-                                )}
-                                {col.key === "activityWeight" && <span className="text-xs text-green-700 flex items-center justify-center h-full">{weight.toFixed(1)}%</span>}
-                                {(col.key === "startDate" || col.key === "finishDate") && (
-                                  <DatePicker value={task[col.key]} onChange={date => updateTask(wbs.wbsId, task.id, col.key, date)} />
-                                )}
-                                {col.key === "progress" && (
-                                  <NumericInput value={task.progress} min={0} max={100} onChange={e => updateTask(wbs.wbsId, task.id, "progress", e.target.value)} />
-                                )}
-                              </div>
-                            ))}
-                            
-                            {/* Gantt Timeline */}
-                            <div className="relative px-2 py-1 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 32 }}>
-                              <div className="relative w-full h-8">
-                                {task.description.trim() && task.startDate && task.finishDate && (
-                                  <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition(task)}>
-                                    <div className="h-6 bg-green-500 transition-all duration-300" 
-                                         style={{ width: `${Math.max(0, Math.min(100, task.progress))}%`, opacity: task.progress > 0 ? 1 : 0.15 }}
-                                         title={`${task.code}: ${task.description}`} />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
+              {/* WBS Content - Only render top-level WBS */}
+              {wbsList.filter(wbs => wbs.level === 0).map((wbs) => {
+                const flattenedIndex = flattenedWbs.findIndex(w => w.wbsId === wbs.wbsId);
+                return renderWbsRow(wbs, flattenedIndex);
               })}
             </div>
           </div>
