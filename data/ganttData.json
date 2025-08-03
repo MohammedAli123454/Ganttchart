@@ -1,0 +1,184 @@
+{
+  "projectName": "Sample Construction Project",
+  "wbs": [
+    {
+      "wbsId": "wbs1",
+      "wbsName": "Engineering",
+      "color": "#388bff",
+      "level": 0,
+      "activities": [
+        {
+          "id": "1",
+          "code": "ENG-001",
+          "description": "Basic Design",
+          "manHours": 30,
+          "startDate": "2025-06-20T00:00:00.000Z",
+          "finishDate": "2025-06-30T00:00:00.000Z",
+          "progress": 60
+        },
+        {
+          "id": "2",
+          "code": "ENG-002",
+          "description": "Detail Design",
+          "manHours": 25,
+          "startDate": "2025-06-25T00:00:00.000Z",
+          "finishDate": "2025-07-10T00:00:00.000Z",
+          "progress": 40
+        }
+      ]
+    },
+    {
+      "wbsId": "wbs2",
+      "wbsName": "Procurement",
+      "color": "#1e90ff",
+      "level": 0,
+      "activities": [
+        {
+          "id": "3",
+          "code": "PRC-001",
+          "description": "Vendor Selection",
+          "manHours": 20,
+          "startDate": "2025-07-01T00:00:00.000Z",
+          "finishDate": "2025-07-10T00:00:00.000Z",
+          "progress": 70
+        },
+        {
+          "id": "4",
+          "code": "PRC-002",
+          "description": "Purchase Order",
+          "manHours": 15,
+          "startDate": "2025-07-11T00:00:00.000Z",
+          "finishDate": "2025-07-20T00:00:00.000Z",
+          "progress": 25
+        }
+      ]
+    },
+    {
+      "wbsId": "wbs3",
+      "wbsName": "Construction",
+      "color": "#2778f0",
+      "level": 0,
+      "activities": [
+        {
+          "id": "5",
+          "code": "CON-001",
+          "description": "Site Mobilization",
+          "manHours": 50,
+          "startDate": "2025-07-15T00:00:00.000Z",
+          "finishDate": "2025-07-25T00:00:00.000Z",
+          "progress": 10
+        }
+      ],
+      "children": [
+        {
+          "wbsId": "wbs3-1",
+          "wbsName": "Civil Work",
+          "color": "#5b9bd5",
+          "level": 1,
+          "parentId": "wbs3",
+          "activities": [
+            {
+              "id": "6",
+              "code": "CIV-001",
+              "description": "Excavation Work",
+              "manHours": 40,
+              "startDate": "2025-07-18T00:00:00.000Z",
+              "finishDate": "2025-08-01T00:00:00.000Z",
+              "progress": 5
+            },
+            {
+              "id": "7",
+              "code": "CIV-002",
+              "description": "Foundation Work",
+              "manHours": 35,
+              "startDate": "2025-08-02T00:00:00.000Z",
+              "finishDate": "2025-08-15T00:00:00.000Z",
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "wbsId": "wbs3-2",
+          "wbsName": "Piping Work",
+          "color": "#5b9bd5",
+          "level": 1,
+          "parentId": "wbs3",
+          "activities": [
+            {
+              "id": "8",
+              "code": "PIP-001",
+              "description": "Pipe Installation",
+              "manHours": 45,
+              "startDate": "2025-08-05T00:00:00.000Z",
+              "finishDate": "2025-08-20T00:00:00.000Z",
+              "progress": 0
+            },
+            {
+              "id": "9",
+              "code": "PIP-002",
+              "description": "Pipe Testing",
+              "manHours": 20,
+              "startDate": "2025-08-21T00:00:00.000Z",
+              "finishDate": "2025-08-25T00:00:00.000Z",
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "wbsId": "wbs3-3",
+          "wbsName": "Mechanical Work",
+          "color": "#5b9bd5",
+          "level": 1,
+          "parentId": "wbs3",
+          "activities": [
+            {
+              "id": "10",
+              "code": "MEC-001",
+              "description": "Equipment Installation",
+              "manHours": 60,
+              "startDate": "2025-08-10T00:00:00.000Z",
+              "finishDate": "2025-08-30T00:00:00.000Z",
+              "progress": 0
+            },
+            {
+              "id": "11",
+              "code": "MEC-002",
+              "description": "Equipment Testing",
+              "manHours": 25,
+              "startDate": "2025-09-01T00:00:00.000Z",
+              "finishDate": "2025-09-10T00:00:00.000Z",
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "wbsId": "wbs3-4",
+          "wbsName": "E&I Work",
+          "color": "#5b9bd5",
+          "level": 1,
+          "parentId": "wbs3",
+          "activities": [
+            {
+              "id": "12",
+              "code": "EI-001",
+              "description": "Electrical Installation",
+              "manHours": 55,
+              "startDate": "2025-08-15T00:00:00.000Z",
+              "finishDate": "2025-09-05T00:00:00.000Z",
+              "progress": 0
+            },
+            {
+              "id": "13",
+              "code": "EI-002",
+              "description": "Instrumentation Setup",
+              "manHours": 30,
+              "startDate": "2025-09-06T00:00:00.000Z",
+              "finishDate": "2025-09-20T00:00:00.000Z",
+              "progress": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

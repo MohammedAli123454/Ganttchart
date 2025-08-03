@@ -7,6 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import ganttData from "@/data/ganttData.json";
+import {
+  addDays,
+  format,
+  convertDatesToObjects,
+  flattenWbs,
+  getAllActivities,
+  calculateTotalManHours,
+  calculateChartData,
+  calculateWbsSummaries,
+  calculateProjectSummary,
+  getTaskPosition,
+  addNewTaskToWbs,
+  updateTaskInWbs,
+  deleteTaskFromWbs
+} from "@/utils/ganttUtils";
 
 // Mock components (replace with actual imports)
 const DatePicker = ({ value, onChange, className }) => (
@@ -29,96 +45,9 @@ const NumericInput = ({ value, onChange, min = 0, max = Infinity }) => (
   />
 );
 
-// Date utilities
-const addDays = (date, days) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
-const addWeeks = (date, weeks) => addDays(date, weeks * 7);
-const addMonths = (date, months) => {
-  const result = new Date(date);
-  result.setMonth(result.getMonth() + months);
-  return result;
-};
-const differenceInDays = (date1, date2) => Math.floor((date1.getTime() - date2.getTime()) / (24 * 60 * 60 * 1000));
-const format = (date, formatStr) => {
-  const month = date.toLocaleDateString('en', { month: 'short' });
-  const day = date.getDate().toString().padStart(2, '0');
-  const year = date.getFullYear();
-  
-  if (formatStr === "MMM dd") return `${month} ${day}`;
-  if (formatStr === "MMM yyyy") return `${month} ${year}`;
-  return `${month} ${day}`;
-};
-const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
-const endOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
-// Initial data with Project structure and hierarchical WBS
-const initialProject = {
-  projectName: "Sample Construction Project",
-  wbs: [
-    {
-      wbsId: "wbs1", wbsName: "Engineering", color: "#388bff", level: 0,
-      activities: [
-        { id: "1", code: "ENG-001", description: "Basic Design", manHours: 30, 
-          startDate: new Date(2025, 5, 20), finishDate: new Date(2025, 5, 30), progress: 60 },
-        { id: "2", code: "ENG-002", description: "Detail Design", manHours: 25, 
-          startDate: new Date(2025, 5, 25), finishDate: new Date(2025, 6, 10), progress: 40 },
-      ],
-    },
-    {
-      wbsId: "wbs2", wbsName: "Procurement", color: "#1e90ff", level: 0,
-      activities: [
-        { id: "3", code: "PRC-001", description: "Vendor Selection", manHours: 20, 
-          startDate: new Date(2025, 6, 1), finishDate: new Date(2025, 6, 10), progress: 70 },
-        { id: "4", code: "PRC-002", description: "Purchase Order", manHours: 15, 
-          startDate: new Date(2025, 6, 11), finishDate: new Date(2025, 6, 20), progress: 25 },
-      ],
-    },
-    {
-      wbsId: "wbs3", wbsName: "Construction", color: "#2778f0", level: 0,
-      activities: [
-        { id: "5", code: "CON-001", description: "Site Mobilization", manHours: 50, 
-          startDate: new Date(2025, 6, 15), finishDate: new Date(2025, 6, 25), progress: 10 },
-      ],
-      children: [
-        {
-          wbsId: "wbs3-1", wbsName: "Civil Work", color: "#5b9bd5", level: 1, parentId: "wbs3",
-          activities: [
-            { id: "6", code: "CIV-001", description: "Excavation Work", manHours: 40, 
-              startDate: new Date(2025, 6, 18), finishDate: new Date(2025, 7, 1), progress: 5 },
-            { id: "7", code: "CIV-002", description: "Foundation Work", manHours: 35, 
-              startDate: new Date(2025, 7, 2), finishDate: new Date(2025, 7, 15), progress: 0 },
-          ],
-        },
-        {
-          wbsId: "wbs3-2", wbsName: "Piping Work", color: "#5b9bd5", level: 1, parentId: "wbs3",
-          activities: [
-            { id: "8", code: "PIP-001", description: "Pipe Installation", manHours: 45, 
-              startDate: new Date(2025, 7, 5), finishDate: new Date(2025, 7, 20), progress: 0 },
-            { id: "9", code: "PIP-002", description: "Pipe Testing", manHours: 20, 
-              startDate: new Date(2025, 7, 21), finishDate: new Date(2025, 7, 25), progress: 0 },
-          ],
-        },
-        {
-          wbsId: "wbs3-3", wbsName: "Mechanical Work", color: "#5b9bd5", level: 1, parentId: "wbs3",
-          activities: [
-            { id: "10", code: "MEC-001", description: "Equipment Installation", manHours: 60, 
-              startDate: new Date(2025, 7, 10), finishDate: new Date(2025, 7, 30), progress: 0 },
-            { id: "11", code: "MEC-002", description: "Equipment Testing", manHours: 25, 
-              startDate: new Date(2025, 8, 1), finishDate: new Date(2025, 8, 10), progress: 0 },
-          ],
-        },
-        {
-          wbsId: "wbs3-4", wbsName: "E&I Work", color: "#5b9bd5", level: 1, parentId: "wbs3",
-          activities: [
-            { id: "12", code: "EI-001", description: "Electrical Installation", manHours: 55, 
-              startDate: new Date(2025, 7, 15), finishDate: new Date(2025, 8, 5), progress: 0 },
-            { id: "13", code: "EI-002", description: "Instrumentation Setup", manHours: 30, 
-              startDate: new Date(2025, 8, 6), finishDate: new Date(2025, 8, 20), progress: 0 },
-          ],
-        },
-      ],
-    },
-  ]
-};
+// Initial data loaded from JSON and converted
+const initialProject = convertDatesToObjects(ganttData);
 
 // Context menu component
 const ContextMenuPopover = ({ open, onOpenChange, onDelete, anchorRef }) => (
@@ -187,113 +116,15 @@ const GanttChart = () => {
     };
   }, [isResizing, startX, startWidth]);
 
-  // Flatten all WBS including children for calculations
-  const flattenedWbs = useMemo(() => {
-    const flattened = [];
-    wbsList.forEach(wbs => {
-      flattened.push(wbs);
-      if (wbs.children) {
-        flattened.push(...wbs.children);
-      }
-    });
-    return flattened;
-  }, [wbsList]);
+  // Calculations using utility functions
+  const flattenedWbs = useMemo(() => flattenWbs(wbsList), [wbsList]);
+  const allActivities = useMemo(() => getAllActivities(flattenedWbs), [flattenedWbs]);
+  const totalManHours = useMemo(() => calculateTotalManHours(allActivities), [allActivities]);
+  const chartData = useMemo(() => calculateChartData(allActivities, viewMode), [allActivities, viewMode]);
 
-  // Calculations
-  const allActivities = useMemo(() => 
-    flattenedWbs.flatMap(wbs => wbs.activities.map(act => ({ ...act, wbsId: wbs.wbsId }))), [flattenedWbs]);
+  const wbsSummaries = useMemo(() => calculateWbsSummaries(flattenedWbs, totalManHours), [flattenedWbs, totalManHours]);
   
-  const totalManHours = useMemo(() => 
-    allActivities.reduce((sum, t) => sum + (Number(t.manHours) || 0), 0), [allActivities]);
-  
-  const overallProgress = useMemo(() => {
-    if (totalManHours === 0) return 0;
-    return allActivities.reduce((sum, t) => {
-      const weight = (Number(t.manHours) || 0) / totalManHours;
-      const progress = Math.max(0, Math.min(100, Number(t.progress) || 0));
-      return sum + weight * progress;
-    }, 0);
-  }, [allActivities, totalManHours]);
-
-  // Timeline calculation
-  const chartData = useMemo(() => {
-    const validTasks = allActivities.filter(task => task.startDate && task.finishDate);
-    if (validTasks.length === 0) {
-      const today = new Date();
-      return { startDate: addDays(today, -7), endDate: addDays(today, 30), timeUnits: [] };
-    }
-    
-    const allDates = validTasks.flatMap(task => [task.startDate, task.finishDate]);
-    const minDate = new Date(Math.min(...allDates));
-    const maxDate = new Date(Math.max(...allDates));
-    const startDate = addDays(minDate, -7);
-    const endDate = addDays(maxDate, 7);
-    
-    const timeUnits = [];
-    let currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const increment = viewMode === "day" ? addDays : viewMode === "week" ? addWeeks : addMonths;
-      timeUnits.push({ label: format(currentDate, viewMode === "month" ? "MMM yyyy" : "MMM dd"), date: new Date(currentDate) });
-      currentDate = increment(currentDate, 1);
-    }
-    
-    return { startDate, endDate, timeUnits };
-  }, [allActivities, viewMode]);
-
-  // WBS summaries with proportional calculations for all WBS levels
-  const wbsSummaries = useMemo(() => {
-    return flattenedWbs.map(wbs => {
-      // For parent WBS, include children's activities in calculations
-      let allWbsActivities = [...wbs.activities];
-      if (wbs.children) {
-        wbs.children.forEach(child => {
-          allWbsActivities.push(...child.activities);
-        });
-      }
-      
-      if (allWbsActivities.length === 0) return { totalManHours: 0, totalWeight: 0, earliestStart: null, latestFinish: null, progress: 0 };
-      
-      const totalWbsManHours = allWbsActivities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
-      // WBS weight is proportional to total project hours
-      const totalWeight = totalManHours > 0 ? (totalWbsManHours / totalManHours) * 100 : 0;
-      const validDates = allWbsActivities.filter(act => act.startDate && act.finishDate);
-      const earliestStart = validDates.length > 0 ? new Date(Math.min(...validDates.map(act => act.startDate))) : null;
-      const latestFinish = validDates.length > 0 ? new Date(Math.max(...validDates.map(act => act.finishDate))) : null;
-      
-      // WBS progress is weighted average of all activities within this WBS (including children)
-      const progress = totalWbsManHours > 0 
-        ? allWbsActivities.reduce((sum, act) => {
-            const activityWeight = (Number(act.manHours) || 0) / totalWbsManHours;
-            return sum + activityWeight * (Number(act.progress) || 0);
-          }, 0) 
-        : 0;
-      
-      return { totalManHours: totalWbsManHours, totalWeight, earliestStart, latestFinish, progress };
-    });
-  }, [flattenedWbs, totalManHours]);
-  
-  // Project summary calculations
-  const projectSummary = useMemo(() => {
-    const totalProjectManHours = allActivities.reduce((sum, act) => sum + (Number(act.manHours) || 0), 0);
-    const validDates = allActivities.filter(act => act.startDate && act.finishDate);
-    const earliestStart = validDates.length > 0 ? new Date(Math.min(...validDates.map(act => act.startDate))) : null;
-    const latestFinish = validDates.length > 0 ? new Date(Math.max(...validDates.map(act => act.finishDate))) : null;
-    
-    // Project progress is weighted average of top-level WBS only (level 0)
-    const topLevelWbs = wbsList.filter(wbs => wbs.level === 0);
-    const projectProgress = totalProjectManHours > 0 
-      ? topLevelWbs.reduce((sum, wbs) => {
-          const wbsIndex = flattenedWbs.findIndex(w => w.wbsId === wbs.wbsId);
-          if (wbsIndex >= 0) {
-            const wbsWeight = wbsSummaries[wbsIndex].totalManHours / totalProjectManHours;
-            return sum + wbsWeight * wbsSummaries[wbsIndex].progress;
-          }
-          return sum;
-        }, 0)
-      : 0;
-    
-    return { totalManHours: totalProjectManHours, totalWeight: 100, earliestStart, latestFinish, progress: projectProgress };
-  }, [allActivities, wbsList, flattenedWbs, wbsSummaries]);
+  const projectSummary = useMemo(() => calculateProjectSummary(allActivities, wbsList, flattenedWbs, wbsSummaries), [allActivities, wbsList, flattenedWbs, wbsSummaries]);
 
   // Helper functions
   const headerCols = [
@@ -312,54 +143,14 @@ const GanttChart = () => {
     headerCols.slice(0, index).reduce((acc, col) => acc + columnWidths[col.key], 0);
 
   const addNewTask = (wbsId) => {
-    const wbs = wbsList.find(w => w.wbsId === wbsId);
-    const taskCode = `${wbsId.split("-")[0].toUpperCase()}-${String(wbs.activities.length + 1).padStart(3, "0")}`;
-    
-    setProjectData(prev => ({
-      ...prev,
-      wbs: prev.wbs.map(w => w.wbsId === wbsId ? {
-        ...w,
-        activities: [...w.activities, {
-          id: Date.now().toString(),
-          code: taskCode,
-          description: "",
-          manHours: 0,
-          startDate: new Date(),
-          finishDate: addDays(new Date(), 7),
-          progress: 0
-        }]
-      } : w)
-    }));
+    setProjectData(prev => addNewTaskToWbs(prev, wbsId));
   };
 
   const updateTask = (wbsId, id, field, value) => {
-    setProjectData(prev => ({
-      ...prev,
-      wbs: prev.wbs.map(wbs => wbs.wbsId === wbsId ? {
-        ...wbs,
-        activities: wbs.activities.map(task => task.id === id ? {
-          ...task,
-          [field]: field === "progress" ? Math.max(0, Math.min(100, Number(value) || 0)) :
-                  field === "manHours" ? Math.max(0, Number(value) || 0) :
-                  ["startDate", "finishDate"].includes(field) ? (value ? new Date(value) : null) : value
-        } : task)
-      } : wbs)
-    }));
+    setProjectData(prev => updateTaskInWbs(prev, wbsId, id, field, value));
   };
 
-  const getTaskPosition = (task) => {
-    if (!task.startDate || !task.finishDate) return { left: "0px", width: "0px" };
-    
-    const totalDays = differenceInDays(chartData.endDate, chartData.startDate);
-    const taskStart = differenceInDays(task.startDate, chartData.startDate);
-    const taskDuration = differenceInDays(task.finishDate, task.startDate) + 1;
-    const totalWidth = chartData.timeUnits.length * 64;
-    
-    return {
-      left: `${Math.max(0, (taskStart / totalDays) * totalWidth)}px`,
-      width: `${Math.max(10, (taskDuration / totalDays) * totalWidth)}px`
-    };
-  };
+  const getTaskPos = (task) => getTaskPosition(task, chartData);
 
   const handleRowContextMenu = (e, wbsId, taskId) => {
     e.preventDefault();
@@ -376,13 +167,7 @@ const GanttChart = () => {
   };
 
   const handleDelete = () => {
-    setProjectData(prev => ({
-      ...prev,
-      wbs: prev.wbs.map(wbs => wbs.wbsId === contextMenu.wbsId ? {
-        ...wbs,
-        activities: wbs.activities.filter(task => task.id !== contextMenu.taskId)
-      } : wbs)
-    }));
+    setProjectData(prev => deleteTaskFromWbs(prev, contextMenu.wbsId, contextMenu.taskId));
     setContextMenu({ visible: false, wbsId: null, taskId: null });
   };
 
@@ -446,7 +231,7 @@ const GanttChart = () => {
           <div className="relative p-2 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 38 }}>
             <div className="relative w-full h-8">
               {summary.earliestStart && summary.latestFinish && (
-                <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition({ startDate: summary.earliestStart, finishDate: summary.latestFinish })}>
+                <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPos({ startDate: summary.earliestStart, finishDate: summary.latestFinish })}>
                   <div className="h-6 transition-all duration-300" 
                        style={{ 
                          width: `${Math.max(0, Math.min(100, summary.progress))}%`, 
@@ -501,7 +286,7 @@ const GanttChart = () => {
                 <div className="relative px-2 py-1 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 32 }}>
                   <div className="relative w-full h-8">
                     {task.description.trim() && task.startDate && task.finishDate && (
-                      <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition(task)}>
+                      <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPos(task)}>
                         <div className="h-6 bg-green-500 transition-all duration-300" 
                              style={{ width: `${Math.max(0, Math.min(100, task.progress))}%`, opacity: task.progress > 0 ? 1 : 0.15 }}
                              title={`${task.code}: ${task.description}`} />
@@ -624,7 +409,7 @@ const GanttChart = () => {
                   <div className="relative p-2 flex items-center bg-white" style={{ minWidth: ganttMinWidth, minHeight: 38 }}>
                     <div className="relative w-full h-8">
                       {projectSummary.earliestStart && projectSummary.latestFinish && (
-                        <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPosition({ startDate: projectSummary.earliestStart, finishDate: projectSummary.latestFinish })}>
+                        <div className="absolute top-1 h-6 bg-gray-200" style={getTaskPos({ startDate: projectSummary.earliestStart, finishDate: projectSummary.latestFinish })}>
                           <div className="h-6 bg-blue-700 transition-all duration-300" 
                                style={{ width: `${Math.max(0, Math.min(100, projectSummary.progress))}%`, opacity: projectSummary.progress > 0 ? 1 : 0.15 }}
                                title={`${projectData.projectName}: ${projectSummary.progress.toFixed(1)}%`} />
