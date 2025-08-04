@@ -25,23 +25,36 @@ function HomePage() {
           </CardHeader>
         </Card>
 
-        <ProjectManager 
-          onProjectSelect={setSelectedProjectId}
-          selectedProjectId={selectedProjectId || undefined}
-        />
-
-        {selectedProjectId && (
-          <Tabs defaultValue="wbs" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="wbs">WBS Structure</TabsTrigger>
-              <TabsTrigger value="gantt">Gantt Chart</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="wbs" className="space-y-4">
+        <Tabs defaultValue="projects" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="projects">Projects</TabsTrigger>
+            <TabsTrigger value="wbs">WBS Structure</TabsTrigger>
+            <TabsTrigger value="gantt">Gantt Chart</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="projects" className="space-y-4">
+            <ProjectManager 
+              onProjectSelect={setSelectedProjectId}
+              selectedProjectId={selectedProjectId || undefined}
+            />
+          </TabsContent>
+          
+          <TabsContent value="wbs" className="space-y-4">
+            {selectedProjectId ? (
               <WBSDemo projectId={selectedProjectId.toString()} />
-            </TabsContent>
-            
-            <TabsContent value="gantt" className="space-y-4">
+            ) : (
+              <Card className="text-center py-12">
+                <CardContent>
+                  <p className="text-gray-500 text-lg">
+                    Please select a project from the Projects tab to view WBS structure
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="gantt" className="space-y-4">
+            {selectedProjectId ? (
               <Card>
                 <CardHeader>
                   <CardTitle>Gantt Chart View</CardTitle>
@@ -53,19 +66,17 @@ function HomePage() {
                   <GanttChart />
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
-        )}
-
-        {!selectedProjectId && (
-          <Card className="text-center py-12">
-            <CardContent>
-              <p className="text-gray-500 text-lg">
-                Select or create a project to start building your WBS structure
-              </p>
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              <Card className="text-center py-12">
+                <CardContent>
+                  <p className="text-gray-500 text-lg">
+                    Please select a project from the Projects tab to view Gantt chart
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
