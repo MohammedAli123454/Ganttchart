@@ -1,6 +1,101 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, GripVertical } from 'lucide-react';
 import { useWBSNodes, useCreateWBSNode, useUpdateWBSNode, useDeleteWBSNode, useMoveWBSNode } from '@/lib/hooks/use-wbs-nodes';
+import { BeatLoader, BarLoader } from 'react-spinners';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+
+// Loading Dialog Component
+const LoadingDialog: React.FC<{
+  isOpen: boolean;
+  message: string;
+  type: 'create' | 'update' | 'delete';
+}> = ({ isOpen, message, type }) => {
+  if (!isOpen) return null;
+
+  const getLoaderColor = () => {
+    switch (type) {
+      case 'create': return '#3b82f6'; // blue
+      case 'update': return '#6b7280'; // gray
+      case 'delete': return '#ef4444'; // red
+      default: return '#3b82f6';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
+        <div className="mb-6">
+          <BeatLoader 
+            color={getLoaderColor()} 
+            size={12} 
+            margin={2}
+          />
+        </div>
+        <p className="text-lg font-medium text-gray-900 mb-2">{message}</p>
+        <div className="mt-4">
+          <BarLoader 
+            color={getLoaderColor()} 
+            width="100%" 
+            height={3}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Delete Confirmation Dialog Component
+const DeleteConfirmationDialog: React.FC<{
+  isOpen: boolean;
+  nodeName: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isDeleting: boolean;
+}> = ({ isOpen, nodeName, onConfirm, onCancel, isDeleting }) => {
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !isDeleting && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete WBS Task</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete "{nodeName}"? This action cannot be undone and will also remove all child tasks.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={onCancel}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="destructive" 
+            onClick={onConfirm}
+            disabled={isDeleting}
+          >
+            {isDeleting ? (
+              <>
+                <BeatLoader size={8} color="white" />
+                <span className="ml-2">Deleting...</span>
+              </>
+            ) : (
+              'Delete'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 // Types
 interface WBSNode {
@@ -226,6 +321,7 @@ interface WBSNodeProps {
   onNodeDelete?: (nodeId: string) => Promise<void>;
   onNodeMove?: (dragData: DragData, targetParentId: string | null, targetIndex: number) => Promise<void>;
   editable?: boolean;
+  treeDisabled?: boolean;
 }
 
 const WBSNodeComponent: React.FC<WBSNodeProps> = ({
@@ -240,7 +336,8 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
   onNodeEdit,
   onNodeDelete,
   onNodeMove,
-  editable = false
+  editable = false,
+  treeDisabled = false
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -248,6 +345,21 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
   });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showInlineAddInput, setShowInlineAddInput] = useState(false);
+  const [newChildName, setNewChildName] = useState('');
+  const [loadingDialog, setLoadingDialog] = useState<{
+    isOpen: boolean;
+    message: string;
+    type: 'create' | 'update' | 'delete';
+  }>({
+    isOpen: false,
+    message: '',
+    type: 'create'
+  });
+  const [deleteConfirmation, setDeleteConfirmation] = useState({
+    isOpen: false,
+    isDeleting: false
+  });
   const [dragState, setDragState] = useState({
     isDragging: false,
     dragOver: false
@@ -266,8 +378,17 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
 
   const handleEdit = async () => {
     if (onNodeEdit && editForm.name.trim()) {
-      await onNodeEdit(node.id, { name: editForm.name.trim() });
-      setIsEditing(false);
+      setLoadingDialog({
+        isOpen: true,
+        message: 'Updating task...',
+        type: 'update'
+      });
+      try {
+        await onNodeEdit(node.id, { name: editForm.name.trim() });
+        setIsEditing(false);
+      } finally {
+        setLoadingDialog({ isOpen: false, message: '', type: 'update' });
+      }
     } else if (!editForm.name.trim()) {
       setEditForm({ name: node.name });
       setIsEditing(false);
@@ -285,6 +406,55 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
         onToggle(node.id);
       }
     }
+  };
+
+  const handleInlineAddChild = async () => {
+    if (newChildName.trim() && onNodeAdd) {
+      setLoadingDialog({
+        isOpen: true,
+        message: 'Creating new task...',
+        type: 'create'
+      });
+      try {
+        await handleAddChild(newChildName.trim());
+        setNewChildName('');
+        setShowInlineAddInput(false);
+      } finally {
+        setLoadingDialog({ isOpen: false, message: '', type: 'create' });
+      }
+    }
+  };
+
+  const handleShowInlineAdd = () => {
+    setShowInlineAddInput(true);
+    if (onToggle && !expanded) {
+      onToggle(node.id);
+    }
+  };
+
+  const handleCancelInlineAdd = () => {
+    setShowInlineAddInput(false);
+    setNewChildName('');
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteConfirmation({ isOpen: true, isDeleting: false });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (onNodeDelete) {
+      setDeleteConfirmation(prev => ({ ...prev, isDeleting: true }));
+      try {
+        await onNodeDelete(node.id);
+        setDeleteConfirmation({ isOpen: false, isDeleting: false });
+      } catch (error) {
+        setDeleteConfirmation(prev => ({ ...prev, isDeleting: false }));
+      }
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmation({ isOpen: false, isDeleting: false });
   };
 
   const handleRightClick = (e: React.MouseEvent) => {
@@ -373,17 +543,8 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
     setContextMenu(null);
   };
 
-  const handleAddChildFromContext = async () => {
-    if (onNodeAdd) {
-      const newNode = {
-        name: "New WBS",
-        parentId: node.id
-      };
-      await onNodeAdd(node.id, newNode);
-      if (onToggle && !expanded) {
-        onToggle(node.id);
-      }
-    }
+  const handleAddChildFromContext = () => {
+    handleShowInlineAdd();
   };
 
   if (isEditing) {
@@ -417,16 +578,18 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
         className={`flex items-center p-3 bg-white border border-gray-200 rounded-lg transition-all duration-150 ${
           dragState.isDragging 
             ? 'opacity-50 cursor-grabbing' 
-            : editable 
+            : editable && !treeDisabled && !loadingDialog.isOpen
               ? 'hover:bg-gray-50 cursor-pointer' 
               : 'hover:bg-gray-50'
         } ${
-          dragState.dragOver && editable 
+          dragState.dragOver && editable && !treeDisabled && !loadingDialog.isOpen
             ? 'bg-blue-50 border-blue-300 shadow-md' 
             : ''
+        } ${
+          (treeDisabled || loadingDialog.isOpen) ? 'pointer-events-none opacity-50' : ''
         }`}
         style={{ marginLeft: `${paddingLeft}px` }}
-        draggable={editable}
+        draggable={editable && !treeDisabled && !loadingDialog.isOpen}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onDragOver={handleDragOver}
@@ -472,7 +635,7 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
           onClose={closeContextMenu}
           onAddChild={handleAddChildFromContext}
           onEdit={() => setIsEditing(true)}
-          onDelete={() => onNodeDelete && onNodeDelete(node.id)}
+          onDelete={handleDeleteClick}
           canDelete={level > 0}
         />
       )}
@@ -494,10 +657,87 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
               onNodeDelete={onNodeDelete}
               onNodeMove={onNodeMove}
               editable={editable}
+              treeDisabled={treeDisabled}
             />
           ))}
+          {showInlineAddInput && (
+            <div className="mb-1" style={{ marginLeft: `${(level + 1) * 24}px` }}>
+              <div className="flex items-center p-3 bg-white border border-blue-300 rounded-lg shadow-sm">
+                <div className="w-4 h-4 mr-2" />
+                <input
+                  type="text"
+                  value={newChildName}
+                  onChange={(e) => setNewChildName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleInlineAddChild();
+                    } else if (e.key === 'Escape') {
+                      handleCancelInlineAdd();
+                    }
+                  }}
+                  onBlur={() => {
+                    if (newChildName.trim()) {
+                      handleInlineAddChild();
+                    } else {
+                      handleCancelInlineAdd();
+                    }
+                  }}
+                  className="flex-1 p-2 border-0 outline-none text-sm font-medium text-gray-900 bg-transparent"
+                  placeholder="Enter task name..."
+                  autoFocus
+                  disabled={loadingDialog.isOpen}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
+      {!hasChildren && expanded && showInlineAddInput && (
+        <div className="mt-1">
+          <div className="mb-1" style={{ marginLeft: `${(level + 1) * 24}px` }}>
+            <div className="flex items-center p-3 bg-white border border-blue-300 rounded-lg shadow-sm">
+              <div className="w-4 h-4 mr-2" />
+              <input
+                type="text"
+                value={newChildName}
+                onChange={(e) => setNewChildName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleInlineAddChild();
+                  } else if (e.key === 'Escape') {
+                    handleCancelInlineAdd();
+                  }
+                }}
+                onBlur={() => {
+                  if (newChildName.trim()) {
+                    handleInlineAddChild();
+                  } else {
+                    handleCancelInlineAdd();
+                  }
+                }}
+                className="flex-1 p-2 border-0 outline-none text-sm font-medium text-gray-900 bg-transparent"
+                placeholder="Enter task name..."
+                autoFocus
+                disabled={loadingDialog.isOpen}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <LoadingDialog
+        isOpen={loadingDialog.isOpen}
+        message={loadingDialog.message}
+        type={loadingDialog.type}
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        nodeName={node.name}
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        isDeleting={deleteConfirmation.isDeleting}
+      />
     </div>
   );
 };
@@ -524,6 +764,15 @@ const WBSTree: React.FC<WBSTreeProps> = ({
 
   const [expandedNodes, setExpandedNodes] = useState(new Set<string>());
   const [showAddRootDialog, setShowAddRootDialog] = useState(false);
+  const [rootLoadingDialog, setRootLoadingDialog] = useState<{
+    isOpen: boolean;
+    message: string;
+    type: 'create' | 'update' | 'delete';
+  }>({
+    isOpen: false,
+    message: '',
+    type: 'create'
+  });
 
   const handleToggle = useCallback((nodeId: string) => {
     setExpandedNodes(prev => {
@@ -566,10 +815,19 @@ const WBSTree: React.FC<WBSTreeProps> = ({
 
   const handleAddRootFromButton = async () => {
     if (onNodeAdd) {
-      const newNode = {
-        name: "New WBS"
-      };
-      await onNodeAdd(null, newNode);
+      setRootLoadingDialog({
+        isOpen: true,
+        message: 'Creating root task...',
+        type: 'create'
+      });
+      try {
+        const newNode = {
+          name: "New WBS"
+        };
+        await onNodeAdd(null, newNode);
+      } finally {
+        setRootLoadingDialog({ isOpen: false, message: '', type: 'create' });
+      }
     }
   };
 
@@ -604,20 +862,23 @@ const WBSTree: React.FC<WBSTreeProps> = ({
         <div className="flex space-x-2 flex-wrap">
           <button
             onClick={expandAll}
-            className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors duration-150"
+            disabled={rootLoadingDialog.isOpen}
+            className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Expand All
           </button>
           <button
             onClick={collapseAll}
-            className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors duration-150"
+            disabled={rootLoadingDialog.isOpen}
+            className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Collapse All
           </button>
           {editable && (
             <button
               onClick={handleAddRootFromButton}
-              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150 flex items-center space-x-1"
+              disabled={rootLoadingDialog.isOpen}
+              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150 flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus size={16} />
               <span>Add Root Task</span>
@@ -633,7 +894,7 @@ const WBSTree: React.FC<WBSTreeProps> = ({
         title="Add New Root Task"
       />
 
-      <div className="bg-gray-50 rounded-lg p-4">
+      <div className={`bg-gray-50 rounded-lg p-4 ${rootLoadingDialog.isOpen ? 'pointer-events-none opacity-50' : ''}`}>
         {data.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No tasks found. {editable && 'Click "Add Root Task" to get started.'}
@@ -653,11 +914,18 @@ const WBSTree: React.FC<WBSTreeProps> = ({
               onNodeEdit={onNodeEdit}
               onNodeDelete={onNodeDelete}
               onNodeMove={onNodeMove}
-              editable={editable}
+              editable={editable && !rootLoadingDialog.isOpen}
+              treeDisabled={rootLoadingDialog.isOpen}
             />
           ))
         )}
       </div>
+
+      <LoadingDialog
+        isOpen={rootLoadingDialog.isOpen}
+        message={rootLoadingDialog.message}
+        type={rootLoadingDialog.type}
+      />
     </div>
   );
 };
