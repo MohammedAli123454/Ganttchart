@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -14,16 +13,6 @@ function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-center">
-              Project Management System
-            </CardTitle>
-            <p className="text-center text-gray-600">
-              Create projects, build WBS structures, and visualize with Gantt charts
-            </p>
-          </CardHeader>
-        </Card>
 
         <Tabs defaultValue="projects" className="w-full">
           <TabsList className="grid w-full grid-cols-3">

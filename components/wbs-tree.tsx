@@ -435,11 +435,7 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
         onContextMenu={handleRightClick}
         onDoubleClick={handleDoubleClick}
       >
-        {editable && (
-          <div className="mr-2 text-gray-400 cursor-grab active:cursor-grabbing">
-            <GripVertical size={16} />
-          </div>
-        )}
+ 
         
         <button
           onClick={handleToggle}
@@ -697,24 +693,6 @@ const WBSDemo: React.FC<WBSDemoProps> = ({ projectId = "1" }) => {
           projectId={projectId}
           editable={isEditable}
         />
-        
-        <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 className="font-semibold text-blue-900 mb-2">Database-Enabled WBS Features:</h3>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>• All changes are automatically saved to the database</li>
-            <li>• Click the chevron arrows to expand/collapse any level of nodes</li>
-            <li>• Use &quot;Expand All&quot; / &quot;Collapse All&quot; buttons to control the entire tree</li>
-            <li>• Toggle &quot;Edit Mode&quot; to enable editing features</li>
-            <li>• <strong>Drag the grip handle (⋮⋮)</strong> to move tasks to different positions</li>
-            <li>• <strong>Drop on nodes</strong> to make tasks children of that node</li>
-            <li>• <strong>Right-click any node</strong> → Add Child creates &quot;New WBS&quot; item</li>
-            <li>• <strong>Double-click any node</strong> to edit it inline</li>
-            <li>• <strong>Click away or press Enter</strong> to save changes</li>
-            <li>• <strong>Press Escape</strong> to cancel editing</li>
-            <li>• Drag & drop prevents moving nodes into their own descendants</li>
-            <li>• Real-time synchronization with PostgreSQL database</li>
-          </ul>
-        </div>
       </div>
     </div>
   );
