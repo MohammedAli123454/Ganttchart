@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Edit2, Trash2 } from 'lucide-react';
 import { useWBSNodes, useCreateWBSNode, useUpdateWBSNode, useDeleteWBSNode, useMoveWBSNode } from '@/lib/hooks/use-wbs-nodes';
 import { BeatLoader, BarLoader } from 'react-spinners';
 import {
@@ -66,7 +66,7 @@ const DeleteConfirmationDialog: React.FC<{
         <DialogHeader>
           <DialogTitle>Delete WBS Task</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete "{nodeName}"? This action cannot be undone and will also remove all child tasks.
+            Are you sure you want to delete &quot;{nodeName}&quot;? This action cannot be undone and will also remove all child tasks.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -447,7 +447,7 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
       try {
         await onNodeDelete(node.id);
         setDeleteConfirmation({ isOpen: false, isDeleting: false });
-      } catch (error) {
+      } catch {
         setDeleteConfirmation(prev => ({ ...prev, isDeleting: false }));
       }
     }

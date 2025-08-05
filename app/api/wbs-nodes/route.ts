@@ -53,9 +53,9 @@ export async function GET(request: NextRequest) {
     });
 
     // Third pass: sort children by order
-    const sortChildren = (node: any) => {
+    const sortChildren = (node: WBSNodeTree & { order?: number }) => {
       if (node.children && node.children.length > 0) {
-        node.children.sort((a: any, b: any) => a.order - b.order);
+        node.children.sort((a: WBSNodeTree & { order?: number }, b: WBSNodeTree & { order?: number }) => (a.order || 0) - (b.order || 0));
         node.children.forEach(sortChildren);
       }
       // Remove order property before returning
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     rootNodes.forEach(sortChildren);
     // Sort root nodes by order
-    rootNodes.sort((a: any, b: any) => a.order - b.order);
+    rootNodes.sort((a: WBSNodeTree & { order?: number }, b: WBSNodeTree & { order?: number }) => (a.order || 0) - (b.order || 0));
 
     return NextResponse.json(rootNodes);
   } catch (error) {
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
   try {
     await connectDb();
     const body = await request.json();
-    const { projectId, parentId, name, order } = body;
+    const { projectId, parentId, name } = body;
 
 
     if (!projectId || !name) {
