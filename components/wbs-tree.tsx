@@ -1,15 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronRight, Plus, Edit2, Trash2, MoreHorizontal } from 'lucide-react';
 import { useWBSNodes, useCreateWBSNode, useUpdateWBSNode, useDeleteWBSNode, useMoveWBSNode } from '@/lib/hooks/use-wbs-nodes';
-import { BeatLoader, BarLoader } from 'react-spinners';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,69 +9,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LoadingDialog, DeleteConfirmationDialog, LOADER_COLORS } from '@/components/wbs-dialogs';
 
-const LOADER_COLORS = {
-  create: '#3b82f6',
-  update: '#6b7280',
-  delete: '#ef4444'
-} as const;
-
-const LoadingDialog: React.FC<{
-  isOpen: boolean;
-  message: string;
-  type: keyof typeof LOADER_COLORS;
-}> = ({ isOpen, message, type }) => {
-  if (!isOpen) return null;
-  const color = LOADER_COLORS[type];
-  
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 text-center">
-        <div className="mb-6">
-          <BeatLoader color={color} size={12} margin={2} />
-        </div>
-        <p className="text-lg font-medium text-gray-900 mb-2">{message}</p>
-        <div className="mt-4">
-          <BarLoader color={color} width="100%" height={3} />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const DeleteConfirmationDialog: React.FC<{
-  isOpen: boolean;
-  nodeName: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  isDeleting: boolean;
-}> = ({ isOpen, nodeName, onConfirm, onCancel, isDeleting }) => (
-  <Dialog open={isOpen} onOpenChange={(open) => !open && !isDeleting && onCancel()}>
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Delete WBS Task</DialogTitle>
-        <DialogDescription>
-          Are you sure you want to delete &quot;{nodeName}&quot;? This action cannot be undone and will also remove all child tasks.
-        </DialogDescription>
-      </DialogHeader>
-      <DialogFooter>
-        <Button variant="outline" onClick={onCancel} disabled={isDeleting}>
-          Cancel
-        </Button>
-        <Button variant="destructive" onClick={onConfirm} disabled={isDeleting}>
-          {isDeleting ? (
-            <>
-              <BeatLoader size={8} color="white" />
-              <span className="ml-2">Deleting...</span>
-            </>
-          ) : (
-            'Delete'
-          )}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-);
 
 interface WBSNode {
   id: string;
@@ -174,15 +104,17 @@ const NodeContextMenu: React.FC<{
   onDelete: () => void;
   canDelete: boolean;
   disabled?: boolean;
-}> = ({ children, onAddChild, onEdit, onDelete, canDelete, disabled }) => {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}> = ({ children, onAddChild, onEdit, onDelete, canDelete, disabled, open, onOpenChange }) => {
   if (disabled) return <>{children}</>;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         {children}
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-48" align="end">
+      <DropdownMenuContent className="w-48 z-50" align="end" sideOffset={5}>
         <DropdownMenuItem onClick={onAddChild} className="cursor-pointer">
           <Plus className="mr-2 h-4 w-4" />
           Add Child Task
@@ -247,6 +179,9 @@ const useNodeHandlers = (
   }>({ isOpen: false, message: '', type: 'create' });
   const [deleteConfirmation, setDeleteConfirmation] = useState({ isOpen: false, isDeleting: false });
   const [dragState, setDragState] = useState({ isDragging: false, dragOver: false });
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [rightClickMenuOpen, setRightClickMenuOpen] = useState(false);
+  const [rightClickPosition, setRightClickPosition] = useState({ x: 0, y: 0 });
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -331,6 +266,13 @@ const useNodeHandlers = (
     }
   };
 
+  const handleRightClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setRightClickPosition({ x: e.clientX, y: e.clientY });
+    setRightClickMenuOpen(true);
+  };
+
   return {
     isEditing,
     setIsEditing,
@@ -352,8 +294,71 @@ const useNodeHandlers = (
     handleShowInlineAdd,
     handleDeleteConfirm,
     handleDragStart,
-    handleDrop
+    handleDrop,
+    handleRightClick,
+    contextMenuOpen,
+    setContextMenuOpen,
+    rightClickMenuOpen,
+    setRightClickMenuOpen,
+    rightClickPosition
   };
+};
+
+const RightClickContextMenu: React.FC<{
+  isOpen: boolean;
+  position: { x: number; y: number };
+  onClose: () => void;
+  onAddChild: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  canDelete: boolean;
+}> = ({ isOpen, position, onClose, onAddChild, onEdit, onDelete, canDelete }) => {
+  if (!isOpen) return null;
+
+  return (
+    <>
+      <div 
+        className="fixed inset-0 z-40" 
+        onClick={onClose}
+        onContextMenu={(e) => e.preventDefault()}
+      />
+      <div
+        className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-48"
+        style={{
+          left: Math.min(position.x, window.innerWidth - 200),
+          top: Math.min(position.y, window.innerHeight - 150),
+          transform: 'translate(0, 0)'
+        }}
+      >
+        <button
+          onClick={() => { onAddChild(); onClose(); }}
+          className="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center text-sm"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Child Task
+        </button>
+        <button
+          onClick={() => { onEdit(); onClose(); }}
+          className="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center text-sm"
+        >
+          <Edit2 className="mr-2 h-4 w-4" />
+          Edit Task
+        </button>
+        {canDelete && (
+          <>
+            <div className="border-t border-gray-200 my-1" />
+            <button
+              onClick={() => { onDelete(); onClose(); }}
+              className="w-full px-3 py-2 text-left hover:bg-red-50 flex items-center text-sm text-red-600"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Task
+            </button>
+          </>
+        )}
+      </div>
+    </>
+  );
 };
 
 const InlineAddInput: React.FC<{
@@ -480,6 +485,7 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
           handlers.setEditForm({ name: node.name });
           handlers.setIsEditing(true);
         } : undefined}
+        onContextMenu={editable ? handlers.handleRightClick : undefined}
       >
         <button
           onClick={handlers.handleToggle}
@@ -496,24 +502,29 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
           <span className="font-medium text-gray-900">{node.name}</span>
         </div>
         
-        {editable && !treeDisabled && !handlers.loadingDialog.isOpen && (
-          <NodeContextMenu
-            onAddChild={handlers.handleShowInlineAdd}
-            onEdit={() => handlers.setIsEditing(true)}
-            onDelete={() => handlers.setDeleteConfirmation({ isOpen: true, isDeleting: false })}
-            canDelete={level > 0}
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => e.stopPropagation()}
+          {editable && !treeDisabled && !handlers.loadingDialog.isOpen && (
+            <NodeContextMenu
+              onAddChild={handlers.handleShowInlineAdd}
+              onEdit={() => handlers.setIsEditing(true)}
+              onDelete={() => handlers.setDeleteConfirmation({ isOpen: true, isDeleting: false })}
+              canDelete={level > 0}
+              open={handlers.contextMenuOpen}
+              onOpenChange={handlers.setContextMenuOpen}
             >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </NodeContextMenu>
-        )}
-      </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity hover:bg-gray-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                title="More options (or right-click node)"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </NodeContextMenu>
+          )}
+        </div>
 
       {hasChildren && expanded && (
         <div className="mt-1">
@@ -579,6 +590,16 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
         onConfirm={handlers.handleDeleteConfirm}
         onCancel={() => handlers.setDeleteConfirmation({ isOpen: false, isDeleting: false })}
         isDeleting={handlers.deleteConfirmation.isDeleting}
+      />
+
+      <RightClickContextMenu
+        isOpen={handlers.rightClickMenuOpen}
+        position={handlers.rightClickPosition}
+        onClose={() => handlers.setRightClickMenuOpen(false)}
+        onAddChild={handlers.handleShowInlineAdd}
+        onEdit={() => handlers.setIsEditing(true)}
+        onDelete={() => handlers.setDeleteConfirmation({ isOpen: true, isDeleting: false })}
+        canDelete={level > 0}
       />
     </div>
   );
