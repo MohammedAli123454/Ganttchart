@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, decimal } from 'drizzle-orm/pg-core';
+import { pgTable, text, serial, integer, timestamp, decimal, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const projects = pgTable('projects', {
@@ -15,6 +15,7 @@ export const wbsNodes = pgTable('wbs_nodes', {
   parentId: integer('parent_id'),
   name: text('name').notNull(),
   order: integer('order').notNull().default(0),
+  isProjectRoot: boolean('is_project_root').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

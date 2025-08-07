@@ -17,6 +17,21 @@ export const useProjects = () => {
   });
 };
 
+// Fetch single project by ID
+export const useProject = (id: string) => {
+  return useQuery({
+    queryKey: ['project', id],
+    queryFn: async (): Promise<Project> => {
+      const response = await fetch(`${API_BASE}/${id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch project');
+      }
+      return response.json();
+    },
+    enabled: !!id,
+  });
+};
+
 // Create project
 export const useCreateProject = () => {
   const queryClient = useQueryClient();

@@ -6,6 +6,7 @@ export interface WBSNode {
   name: string;             // Display name/title of the task
   children?: WBSNode[];     // Optional array of child nodes for hierarchical structure
   parentId?: string;        // Optional parent node ID for relationship tracking
+  isProjectRoot?: boolean;  // Flag indicating if this is the project root node
 }
 
 /**

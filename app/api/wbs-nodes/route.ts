@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, wbsNodes, NewWbsNode, connectDb } from '@/lib/db';
-import { eq, and, sql } from 'drizzle-orm';
+import { db, wbsNodes, projects, connectDb } from '@/lib/db';
+import { eq, and } from 'drizzle-orm';
 
 interface WBSNodeTree {
   id: string;
@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
     if (!projectId) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
+
+    // First check if project root node exists, if not create it
+    await ensureProjectRootNode(parseInt(projectId));
 
     const nodes = await db.select().from(wbsNodes)
       .where(eq(wbsNodes.projectId, parseInt(projectId)))
@@ -73,55 +76,110 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper function to ensure project root node exists
+async function ensureProjectRootNode(projectId: number) {
+  try {
+    // Check if project root node already exists
+    const existingRoot = await db.select().from(wbsNodes)
+      .where(and(
+        eq(wbsNodes.projectId, projectId),
+        eq(wbsNodes.isProjectRoot, true)
+      ))
+      .limit(1);
+
+    if (existingRoot.length === 0) {
+      // Get project name
+      const project = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+      if (project.length > 0) {
+        // Create project root node
+        await db.insert(wbsNodes).values({
+          projectId,
+          name: project[0].name,
+          order: 0,
+          parentId: null,
+          isProjectRoot: true
+        });
+      }
+    }
+  } catch (error: any) {
+    // If is_project_root column doesn't exist yet, skip for now
+    if (error?.message?.includes('is_project_root') || error?.code === '42703') {
+      console.log('is_project_root column not found, skipping project root creation for now');
+      return;
+    }
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     await connectDb();
     const body = await request.json();
     const { projectId, parentId, name } = body;
 
-
     if (!projectId || !name) {
       return NextResponse.json({ error: 'Project ID and name are required' }, { status: 400 });
     }
 
+    // Ensure project root node exists
+    await ensureProjectRootNode(parseInt(projectId));
+
     // Calculate the correct order by querying existing siblings
     let finalOrder = 0;
-    const parsedParentId = parentId ? parseInt(parentId) : null;
+    let actualParentId = parentId ? parseInt(parentId) : null;
     
-    if (parsedParentId) {
+    // If parentId is null, we need to make this a child of the project root node
+    if (!actualParentId) {
+      try {
+        // Find the project root node
+        const projectRoot = await db.select().from(wbsNodes)
+          .where(and(
+            eq(wbsNodes.projectId, parseInt(projectId)),
+            eq(wbsNodes.isProjectRoot, true)
+          ))
+          .limit(1);
+        
+        if (projectRoot.length > 0) {
+          actualParentId = projectRoot[0].id;
+        }
+      } catch (error: any) {
+        // If is_project_root column doesn't exist, continue with null parentId
+        if (error?.message?.includes('is_project_root') || error?.code === '42703') {
+          console.log('is_project_root column not found, using null parentId');
+          actualParentId = null;
+        } else {
+          throw error;
+        }
+      }
+    }
+    
+    if (actualParentId) {
       // Get existing children of this parent
       const siblings = await db.select().from(wbsNodes)
         .where(and(
           eq(wbsNodes.projectId, parseInt(projectId)),
-          eq(wbsNodes.parentId, parsedParentId)
+          eq(wbsNodes.parentId, actualParentId)
         ))
         .orderBy(wbsNodes.order);
       
       // Find the maximum order value and add 1 to place at the end
       const maxOrder = siblings.length > 0 ? Math.max(...siblings.map(s => s.order)) : -1;
       finalOrder = maxOrder + 1;
-      
-    } else {
-      // Get existing root nodes
-      const rootNodes = await db.select().from(wbsNodes)
-        .where(and(
-          eq(wbsNodes.projectId, parseInt(projectId)),
-          sql`${wbsNodes.parentId} IS NULL`
-        ))
-        .orderBy(wbsNodes.order);
-      
-      // Find the maximum order value and add 1 to place at the end
-      const maxOrder = rootNodes.length > 0 ? Math.max(...rootNodes.map(r => r.order)) : -1;
-      finalOrder = maxOrder + 1;
-      
     }
 
-    const newNode: NewWbsNode = {
+    const newNode: any = {
       projectId: parseInt(projectId),
-      parentId: parsedParentId,
+      parentId: actualParentId,
       name,
       order: finalOrder
     };
+    
+    // Only add isProjectRoot if the column exists
+    try {
+      newNode.isProjectRoot = false;
+    } catch (error) {
+      // Column doesn't exist, skip this field
+    }
 
     const [createdNode] = await db.insert(wbsNodes).values(newNode).returning();
 

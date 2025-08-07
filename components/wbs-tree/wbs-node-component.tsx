@@ -58,6 +58,8 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
   // Node state calculations
   const hasChildren = Boolean(node.children?.length);
   const paddingLeft = level * 24; // Visual indentation based on hierarchy level
+  const isProjectRoot = Boolean(node.isProjectRoot);
+  const isNodeEditable = editable && !isProjectRoot; // Project root nodes are not editable
   
   // Custom hook that manages all node-specific event handlers and state
   const handlers = useNodeHandlers(
@@ -66,19 +68,19 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
 
   /**
    * Drag and drop event handlers configuration
-   * Only active when editable mode is enabled
+   * Only active when editable mode is enabled and not project root
    */
   const dragHandlers = {
-    onDragStart: editable ? handlers.handleDragStart : undefined,
+    onDragStart: isNodeEditable ? handlers.handleDragStart : undefined,
     onDragEnd: () => handlers.setDragState({ isDragging: false, dragOver: false }),
-    onDragOver: editable ? (e: React.DragEvent) => {
+    onDragOver: isNodeEditable ? (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (!handlers.dragState.dragOver) {
         handlers.setDragState({ ...handlers.dragState, dragOver: true });
       }
     } : undefined,
-    onDragLeave: editable ? (e: React.DragEvent) => {
+    onDragLeave: isNodeEditable ? (e: React.DragEvent) => {
       // Check if mouse has truly left the node boundaries to avoid flickering
       const rect = nodeRef.current?.getBoundingClientRect();
       if (rect && (
@@ -88,7 +90,7 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
         handlers.setDragState({ ...handlers.dragState, dragOver: false });
       }
     } : undefined,
-    onDrop: editable ? handlers.handleDrop : undefined
+    onDrop: isNodeEditable ? handlers.handleDrop : undefined
   };
 
   // Inline editing mode - replaces normal node display with editable input
@@ -120,14 +122,14 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
    * Dynamic CSS classes for node styling based on current state
    * Handles dragging, hover, disabled states, and drop zone highlighting
    */
-  const nodeClasses = `flex items-center p-3 bg-white border border-gray-200 rounded-lg transition-all duration-150 group ${
+  const nodeClasses = `flex items-center p-2 bg-white border border-gray-200 rounded-lg transition-all duration-150 group ${
     handlers.dragState.isDragging 
       ? 'opacity-50 cursor-grabbing' 
-      : editable && !treeDisabled && !handlers.loadingDialog.isOpen
+      : isNodeEditable && !treeDisabled && !handlers.loadingDialog.isOpen
         ? 'hover:bg-gray-50 cursor-pointer' 
         : 'hover:bg-gray-50'
   } ${
-    handlers.dragState.dragOver && editable && !treeDisabled && !handlers.loadingDialog.isOpen
+    handlers.dragState.dragOver && isNodeEditable && !treeDisabled && !handlers.loadingDialog.isOpen
       ? 'bg-blue-50 border-blue-300 shadow-md' 
       : ''
   } ${
@@ -141,14 +143,14 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
         ref={nodeRef}
         className={nodeClasses}
         style={{ marginLeft: `${paddingLeft}px` }}
-        draggable={editable && !treeDisabled && !handlers.loadingDialog.isOpen}
+        draggable={isNodeEditable && !treeDisabled && !handlers.loadingDialog.isOpen}
         {...dragHandlers}
-        onDoubleClick={editable ? (e: React.MouseEvent) => {
+        onDoubleClick={isNodeEditable ? (e: React.MouseEvent) => {
           e.stopPropagation();
           handlers.setEditForm({ name: node.name });
           handlers.setIsEditing(true);
         } : undefined}
-        onContextMenu={editable ? handlers.handleRightClick : undefined}
+        onContextMenu={isNodeEditable ? handlers.handleRightClick : undefined}
       >
         {/* Expand/collapse button - shows chevron for nodes with children */}
         <button
@@ -165,11 +167,15 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
         
         {/* Node content - task name */}
         <div className="flex-1 min-w-0">
-          <span className="font-medium text-gray-900">{node.name}</span>
+          <span className={`text-gray-900 ${
+            hasChildren || isProjectRoot ? 'font-bold' : 'font-medium'
+          }`}>
+            {node.name}
+          </span>
         </div>
         
-        {/* Actions menu - only visible in edit mode and on hover */}
-        {editable && !treeDisabled && !handlers.loadingDialog.isOpen && (
+        {/* Actions menu - only visible in edit mode and on hover, not for project root */}
+        {isNodeEditable && !treeDisabled && !handlers.loadingDialog.isOpen && (
           <NodeContextMenu
             onAddChild={handlers.handleShowInlineAdd}
             onEdit={() => handlers.setIsEditing(true)}
@@ -210,7 +216,7 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
               onNodeEdit={onNodeEdit}
               onNodeDelete={onNodeDelete}
               onNodeMove={onNodeMove}
-              editable={editable}
+              editable={editable && !Boolean(child.isProjectRoot)}
               treeDisabled={treeDisabled}
               allNodes={allNodes}
             />

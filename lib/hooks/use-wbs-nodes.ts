@@ -5,6 +5,7 @@ export interface WBSNode {
   name: string;
   children?: WBSNode[];
   parentId?: string;
+  isProjectRoot?: boolean;
 }
 
 interface CreateWBSNodeData {

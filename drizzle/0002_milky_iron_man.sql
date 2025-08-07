@@ -1,0 +1,1 @@
+ALTER TABLE "wbs_nodes" ADD COLUMN "is_project_root" boolean DEFAULT false NOT NULL;

@@ -11,14 +11,14 @@ function HomePage() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-white p-4">
+      <div className="w-full space-y-6">
 
         <Tabs defaultValue="projects" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="projects">Projects</TabsTrigger>
-            <TabsTrigger value="wbs">WBS Structure</TabsTrigger>
-            <TabsTrigger value="gantt">Gantt Chart</TabsTrigger>
+            <TabsTrigger value="projects" className="font-bold">Projects</TabsTrigger>
+            <TabsTrigger value="wbs" className="font-bold">WBS Structure</TabsTrigger>
+            <TabsTrigger value="gantt" className="font-bold">Gantt Chart</TabsTrigger>
           </TabsList>
           
           <TabsContent value="projects" className="space-y-4">

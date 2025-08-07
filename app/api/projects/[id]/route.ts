@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, projects, connectDb } from '@/lib/db';
-import { eq } from 'drizzle-orm';
+import { db, projects, wbsNodes, connectDb } from '@/lib/db';
+import { eq, and } from 'drizzle-orm';
 
 export async function GET(
   request: NextRequest,
@@ -50,6 +50,27 @@ export async function PUT(
 
     if (!updatedProject) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Update project root node name if it exists
+    try {
+      await db
+        .update(wbsNodes)
+        .set({ 
+          name,
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(wbsNodes.projectId, projectId),
+          eq(wbsNodes.isProjectRoot, true)
+        ));
+    } catch (error: any) {
+      // If is_project_root column doesn't exist yet, skip
+      if (error?.message?.includes('is_project_root') || error?.code === '42703') {
+        console.log('is_project_root column not found, skipping project root name sync');
+      } else {
+        throw error;
+      }
     }
 
     return NextResponse.json(updatedProject);
