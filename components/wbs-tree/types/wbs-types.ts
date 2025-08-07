@@ -34,6 +34,7 @@ export interface WBSNodeProps {
   onNodeMove?: (dragData: DragData, targetParentId: string | null, targetIndex: number) => Promise<void>; // Move node callback
   editable?: boolean;               // Whether editing operations are allowed
   treeDisabled?: boolean;           // Whether the entire tree is disabled
+  allNodes?: WBSNode[];             // All nodes in the tree for context in loading messages
 }
 
 /**

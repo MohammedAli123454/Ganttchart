@@ -11,7 +11,8 @@ export const useNodeHandlers = (
   onNodeAdd?: (parentId: string | null, node: Omit<WBSNode, 'id'>) => Promise<void>,
   onNodeEdit?: (nodeId: string, updates: Partial<WBSNode>) => Promise<void>,
   onNodeDelete?: (nodeId: string) => Promise<void>,
-  onNodeMove?: (dragData: DragData, targetParentId: string | null, targetIndex: number) => Promise<void>
+  onNodeMove?: (dragData: DragData, targetParentId: string | null, targetIndex: number) => Promise<void>,
+  allNodes?: WBSNode[]
 ) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: node.name });
@@ -27,6 +28,46 @@ export const useNodeHandlers = (
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [rightClickMenuOpen, setRightClickMenuOpen] = useState(false);
   const [rightClickPosition, setRightClickPosition] = useState({ x: 0, y: 0 });
+
+  // Helper function to find a node by ID in the tree
+  const findNodeById = (nodes: WBSNode[], id: string): WBSNode | null => {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      if (node.children) {
+        const found = findNodeById(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // Helper function to create detailed move message
+  const createMoveMessage = (dragData: DragData, targetParentId: string | null): string => {
+    if (!allNodes) return 'Moving task...';
+
+    const draggedNode = findNodeById(allNodes, dragData.nodeId);
+    const sourceParent = dragData.sourceParentId ? findNodeById(allNodes, dragData.sourceParentId) : null;
+    const targetParent = targetParentId ? findNodeById(allNodes, targetParentId) : null;
+
+    if (!draggedNode) return 'Moving task...';
+
+    const taskName = `"${draggedNode.name}"`;
+    
+    // Same parent move
+    if (dragData.sourceParentId === targetParentId) {
+      if (sourceParent) {
+        return `Repositioning ${taskName} within "${sourceParent.name}" WBS`;
+      } else {
+        return `Repositioning ${taskName} within the root WBS level`;
+      }
+    }
+    
+    // Different parent move
+    const sourceDesc = sourceParent ? `"${sourceParent.name}"` : 'root level';
+    const targetDesc = targetParent ? `"${targetParent.name}"` : 'root level';
+    
+    return `Moving ${taskName} from ${sourceDesc} to ${targetDesc} WBS`;
+  };
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -86,6 +127,11 @@ export const useNodeHandlers = (
   };
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (loadingDialog.isOpen) {
+      e.preventDefault();
+      return;
+    }
+    
     const dragData: DragData = { nodeId: node.id, sourceParentId: parentId, sourceIndex: index };
     e.dataTransfer.setData('application/json', JSON.stringify(dragData));
     e.dataTransfer.effectAllowed = 'move';
@@ -93,21 +139,47 @@ export const useNodeHandlers = (
   };
 
   const handleDrop = async (e: React.DragEvent) => {
-    if (!onNodeMove) return;
+    if (!onNodeMove || loadingDialog.isOpen) return;
     e.preventDefault();
     e.stopPropagation();
     
     try {
-      const dragData: DragData = JSON.parse(e.dataTransfer.getData('application/json'));
-      if (dragData.nodeId === node.id) return;
+      const dragDataString = e.dataTransfer.getData('application/json');
+      if (!dragDataString) {
+        console.warn('No drag data found');
+        return;
+      }
       
-      const targetParentId = node.children?.length && expanded ? node.id : parentId;
-      const targetIndex = node.children?.length && expanded ? node.children.length : index + 1;
+      const dragData: DragData = JSON.parse(dragDataString);
+      if (dragData.nodeId === node.id) {
+        console.warn('Cannot drop node on itself');
+        return;
+      }
+      
+      // Determine drop target based on whether node has children and is expanded
+      let targetParentId: string | null;
+      let targetIndex: number;
+      
+      if (node.children?.length && expanded) {
+        // Dropping into an expanded parent node (as first child)
+        targetParentId = node.id;
+        targetIndex = 0;
+      } else {
+        // Dropping as sibling - dragged node should take the target node's position
+        targetParentId = parentId;
+        targetIndex = index;
+      }
+
+      // Create detailed loading message
+      const moveMessage = createMoveMessage(dragData, targetParentId);
+      setLoadingDialog({ isOpen: true, message: moveMessage, type: 'update' });
+
       await onNodeMove(dragData, targetParentId, targetIndex);
     } catch (error) {
       console.error('Error handling drop:', error);
     } finally {
       setDragState({ isDragging: false, dragOver: false });
+      setLoadingDialog({ isOpen: false, message: '', type: 'update' });
     }
   };
 

@@ -22,37 +22,149 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Node not found' }, { status: 404 });
     }
 
+    console.log('Move operation:', {
+      nodeId: parsedNodeId,
+      currentParent: nodeToMove.parentId,
+      currentOrder: nodeToMove.order,
+      targetParent: parsedTargetParentId,
+      targetIndex
+    });
+
+    // Check if the move is actually needed
+    if (nodeToMove.parentId === parsedTargetParentId && nodeToMove.order === targetIndex) {
+      console.log('Node is already in target position, skipping move');
+      return NextResponse.json({ success: true, message: 'Node already in position' });
+    }
+
     // Start transaction
     await db.transaction(async (tx) => {
-      // First, adjust the order of existing nodes at the target location
-      if (parsedTargetParentId) {
-        // Moving to a parent node - update order of siblings
-        await tx
-          .update(wbsNodes)
-          .set({ 
-            order: sql`${wbsNodes.order} + 1`,
-            updatedAt: new Date()
-          })
-          .where(
-            and(
-              eq(wbsNodes.parentId, parsedTargetParentId),
-              gte(wbsNodes.order, targetIndex)
-            )
-          );
+      const currentParentId = nodeToMove.parentId;
+      const currentOrder = nodeToMove.order;
+      const isSameParent = currentParentId === parsedTargetParentId;
+      
+      if (!isSameParent) {
+        // Moving to different parent - adjust old parent's children orders first
+        if (currentParentId) {
+          await tx
+            .update(wbsNodes)
+            .set({ 
+              order: sql`${wbsNodes.order} - 1`,
+              updatedAt: new Date()
+            })
+            .where(
+              and(
+                eq(wbsNodes.parentId, currentParentId),
+                gte(wbsNodes.order, currentOrder)
+              )
+            );
+        } else {
+          await tx
+            .update(wbsNodes)
+            .set({ 
+              order: sql`${wbsNodes.order} - 1`,
+              updatedAt: new Date()
+            })
+            .where(
+              and(
+                sql`${wbsNodes.parentId} IS NULL`,
+                gte(wbsNodes.order, currentOrder)
+              )
+            );
+        }
+        
+        // Make space in new parent
+        if (parsedTargetParentId) {
+          await tx
+            .update(wbsNodes)
+            .set({ 
+              order: sql`${wbsNodes.order} + 1`,
+              updatedAt: new Date()
+            })
+            .where(
+              and(
+                eq(wbsNodes.parentId, parsedTargetParentId),
+                gte(wbsNodes.order, targetIndex)
+              )
+            );
+        } else {
+          await tx
+            .update(wbsNodes)
+            .set({ 
+              order: sql`${wbsNodes.order} + 1`,
+              updatedAt: new Date()
+            })
+            .where(
+              and(
+                sql`${wbsNodes.parentId} IS NULL`,
+                gte(wbsNodes.order, targetIndex)
+              )
+            );
+        }
       } else {
-        // Moving to root level - update order of root nodes
-        await tx
-          .update(wbsNodes)
-          .set({ 
-            order: sql`${wbsNodes.order} + 1`,
-            updatedAt: new Date()
-          })
-          .where(
-            and(
-              sql`${wbsNodes.parentId} IS NULL`,
-              gte(wbsNodes.order, targetIndex)
-            )
-          );
+        // Same parent - reorder within same parent
+        if (currentOrder < targetIndex) {
+          // Moving down - decrease order of items between current and target
+          if (parsedTargetParentId) {
+            await tx
+              .update(wbsNodes)
+              .set({ 
+                order: sql`${wbsNodes.order} - 1`,
+                updatedAt: new Date()
+              })
+              .where(
+                and(
+                  eq(wbsNodes.parentId, parsedTargetParentId),
+                  sql`${wbsNodes.order} > ${currentOrder}`,
+                  sql`${wbsNodes.order} <= ${targetIndex}`
+                )
+              );
+          } else {
+            await tx
+              .update(wbsNodes)
+              .set({ 
+                order: sql`${wbsNodes.order} - 1`,
+                updatedAt: new Date()
+              })
+              .where(
+                and(
+                  sql`${wbsNodes.parentId} IS NULL`,
+                  sql`${wbsNodes.order} > ${currentOrder}`,
+                  sql`${wbsNodes.order} <= ${targetIndex}`
+                )
+              );
+          }
+        } else if (currentOrder > targetIndex) {
+          // Moving up - increase order of items between target and current
+          if (parsedTargetParentId) {
+            await tx
+              .update(wbsNodes)
+              .set({ 
+                order: sql`${wbsNodes.order} + 1`,
+                updatedAt: new Date()
+              })
+              .where(
+                and(
+                  eq(wbsNodes.parentId, parsedTargetParentId),
+                  sql`${wbsNodes.order} >= ${targetIndex}`,
+                  sql`${wbsNodes.order} < ${currentOrder}`
+                )
+              );
+          } else {
+            await tx
+              .update(wbsNodes)
+              .set({ 
+                order: sql`${wbsNodes.order} + 1`,
+                updatedAt: new Date()
+              })
+              .where(
+                and(
+                  sql`${wbsNodes.parentId} IS NULL`,
+                  sql`${wbsNodes.order} >= ${targetIndex}`,
+                  sql`${wbsNodes.order} < ${currentOrder}`
+                )
+              );
+          }
+        }
       }
 
       // Move the node to its new position

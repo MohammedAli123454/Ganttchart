@@ -140,6 +140,7 @@ const WBSTree: React.FC<WBSTreeProps> = ({ projectId, editable = false }) => {
               onNodeMove={database.moveNode}
               editable={editable && !isLoading}
               treeDisabled={isLoading}
+              allNodes={database.wbsData}
             />
           ))
         )}

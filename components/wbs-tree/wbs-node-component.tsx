@@ -49,7 +49,8 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
   onNodeDelete,
   onNodeMove,
   editable = false,
-  treeDisabled = false
+  treeDisabled = false,
+  allNodes
 }) => {
   // DOM reference for drag-and-drop boundary calculations
   const nodeRef = useRef<HTMLDivElement>(null);
@@ -60,7 +61,7 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
   
   // Custom hook that manages all node-specific event handlers and state
   const handlers = useNodeHandlers(
-    node, parentId, index, expanded, onToggle, onNodeAdd, onNodeEdit, onNodeDelete, onNodeMove
+    node, parentId, index, expanded, onToggle, onNodeAdd, onNodeEdit, onNodeDelete, onNodeMove, allNodes
   );
 
   /**
@@ -211,6 +212,7 @@ const WBSNodeComponent: React.FC<WBSNodeProps> = ({
               onNodeMove={onNodeMove}
               editable={editable}
               treeDisabled={treeDisabled}
+              allNodes={allNodes}
             />
           ))}
           {/* Inline input for adding new child tasks */}
